@@ -294,104 +294,110 @@ local playersPage = tabPages["Players"]
 -- ╔══════════════════════════════════════════╗
 -- ║       KEYBIND CAPTURE OVERLAY            ║
 -- ╚══════════════════════════════════════════╝
+-- Uses its own ScreenGui with DisplayOrder=999 so it always renders
+-- on top of the main menu regardless of ZIndex or ZIndexBehavior.
 
-local kbOverlay = newInstance("Frame", {
-    Size                  = UDim2.new(1, 0, 1, 0),
-    BackgroundColor3      = Color3.fromRGB(0, 0, 0),
-    BackgroundTransparency = 0.42,
-    BorderSizePixel        = 0,
-    Visible                = false,
-    ZIndex                 = 60,
-}, screenGui)
+local kbGui = Instance.new("ScreenGui")
+kbGui.Name           = "SenetchaKB"
+kbGui.ResetOnSpawn   = false
+kbGui.DisplayOrder   = 999
+kbGui.IgnoreGuiInset = true
+kbGui.Enabled        = false
+kbGui.Parent         = player.PlayerGui
 
-local kbBox = newInstance("Frame", {
-    Size             = UDim2.new(0, 280, 0, 120),
-    Position         = UDim2.new(0.5, -140, 0.5, -60),
-    BackgroundColor3 = Color3.fromRGB(14, 12, 28),
-    BorderSizePixel  = 0,
-    ZIndex           = 61,
-}, kbOverlay)
+-- Dark backdrop
+local kbOverlay = Instance.new("Frame")
+kbOverlay.Size                   = UDim2.new(1, 0, 1, 0)
+kbOverlay.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
+kbOverlay.BackgroundTransparency = 0.45
+kbOverlay.BorderSizePixel        = 0
+kbOverlay.Parent                 = kbGui
+
+-- Popup box
+local kbBox = Instance.new("Frame")
+kbBox.Size             = UDim2.new(0, 290, 0, 130)
+kbBox.Position         = UDim2.new(0.5, -145, 0.5, -65)
+kbBox.BackgroundColor3 = Color3.fromRGB(14, 12, 28)
+kbBox.BorderSizePixel  = 0
+kbBox.Parent           = kbGui
 corner(kbBox, 12)
-stroke(kbBox, Color3.fromRGB(120, 70, 220), 1.5).ZIndex = 61
+stroke(kbBox, Color3.fromRGB(120, 70, 220), 1.5)
 
-local kbTitle = newInstance("TextLabel", {
-    Text              = "⌨  Press any key to bind",
-    Size              = UDim2.new(1, 0, 0, 40),
-    Position          = UDim2.new(0, 0, 0, 10),
-    BackgroundTransparency = 1,
-    TextColor3        = Color3.fromRGB(210, 170, 255),
-    TextSize          = 16,
-    Font              = Enum.Font.GothamBold,
-    ZIndex            = 62,
-}, kbBox)
+local kbTitle = Instance.new("TextLabel")
+kbTitle.Text                = "⌨   Press any key to bind"
+kbTitle.Size                = UDim2.new(1, 0, 0, 44)
+kbTitle.Position            = UDim2.new(0, 0, 0, 8)
+kbTitle.BackgroundTransparency = 1
+kbTitle.TextColor3          = Color3.fromRGB(210, 170, 255)
+kbTitle.TextSize            = 16
+kbTitle.Font                = Enum.Font.GothamBold
+kbTitle.Parent              = kbBox
 
-local kbSub = newInstance("TextLabel", {
-    Text              = "for: ?",
-    Size              = UDim2.new(1, -20, 0, 18),
-    Position          = UDim2.new(0, 10, 0, 50),
-    BackgroundTransparency = 1,
-    TextColor3        = Color3.fromRGB(150, 120, 200),
-    TextSize          = 12,
-    Font              = Enum.Font.Gotham,
-    TextXAlignment    = Enum.TextXAlignment.Left,
-    ZIndex            = 62,
-}, kbBox)
+local kbSub = Instance.new("TextLabel")
+kbSub.Text                  = "for: ?"
+kbSub.Size                  = UDim2.new(1, -20, 0, 18)
+kbSub.Position              = UDim2.new(0, 10, 0, 52)
+kbSub.BackgroundTransparency = 1
+kbSub.TextColor3            = Color3.fromRGB(150, 120, 200)
+kbSub.TextSize              = 12
+kbSub.Font                  = Enum.Font.Gotham
+kbSub.TextXAlignment        = Enum.TextXAlignment.Left
+kbSub.Parent                = kbBox
 
-local kbCancel = newInstance("TextButton", {
-    Text             = "Cancel  [Esc]",
-    Size             = UDim2.new(0, 140, 0, 28),
-    Position         = UDim2.new(0.5, -70, 1, -36),
-    BackgroundColor3 = Color3.fromRGB(160, 40, 60),
-    TextColor3       = Color3.fromRGB(255, 255, 255),
-    TextSize         = 12,
-    Font             = Enum.Font.GothamBold,
-    BorderSizePixel  = 0,
-    ZIndex           = 62,
-}, kbBox)
+local kbCancel = Instance.new("TextButton")
+kbCancel.Text             = "Cancel  [Esc]"
+kbCancel.Size             = UDim2.new(0, 140, 0, 28)
+kbCancel.Position         = UDim2.new(0.5, -70, 1, -36)
+kbCancel.BackgroundColor3 = Color3.fromRGB(160, 40, 60)
+kbCancel.TextColor3       = Color3.fromRGB(255, 255, 255)
+kbCancel.TextSize         = 12
+kbCancel.Font             = Enum.Font.GothamBold
+kbCancel.BorderSizePixel  = 0
+kbCancel.Parent           = kbBox
 corner(kbCancel, 7)
 
-local kbCallback     = nil
+local kbCallback      = nil
 local listeningForKey = false
 
 local function openKeybindCapture(label, cb)
-    kbSub.Text        = "for:  " .. label
-    kbCallback        = cb
-    listeningForKey   = false          -- not yet — wait for the pill click to fully finish
-    kbOverlay.Visible = true
-    -- Delay by 2 frames so the MouseButton1 that opened this overlay
-    -- is already gone before we start listening
-    task.defer(function()
-        task.defer(function()
-            listeningForKey = true
-        end)
-    end)
+    kbSub.Text      = "for:  " .. label
+    kbCallback      = cb
+    kbGui.Enabled   = true
+    listeningForKey = false
+    -- task.wait() yields until next Heartbeat so the LMB click
+    -- that opened the overlay is already fully processed and gone
+    task.wait()
+    listeningForKey = true
 end
 
 local function closeKeybindCapture()
-    listeningForKey   = false
-    kbOverlay.Visible = false
-    kbCallback        = nil
+    listeningForKey = false
+    kbGui.Enabled   = false
+    kbCallback      = nil
 end
+
 kbCancel.MouseButton1Click:Connect(closeKeybindCapture)
 
 UserInputService.InputBegan:Connect(function(inp, gpe)
     if not listeningForKey then return end
-    -- Ignore the left click on the pill button itself
     if inp.UserInputType == Enum.UserInputType.MouseButton1 then return end
     if inp.KeyCode == Enum.KeyCode.Escape then closeKeybindCapture() return end
-    local label, key
+
+    local bindLabel, bindKey
     if inp.UserInputType == Enum.UserInputType.Keyboard then
-        -- Skip modifier-only keys that don't make sense as binds
-        local skip = {
-            [Enum.KeyCode.Unknown]=true, [Enum.KeyCode.Insert]=true,
-        }
-        if skip[inp.KeyCode] then return end
-        label = inp.KeyCode.Name; key = inp.KeyCode
+        if inp.KeyCode == Enum.KeyCode.Unknown then return end
+        bindLabel = inp.KeyCode.Name
+        bindKey   = inp.KeyCode
     elseif inp.UserInputType == Enum.UserInputType.MouseButton2 then
-        label = "RMB"; key = Enum.UserInputType.MouseButton2
-    else return end
+        bindLabel = "RMB"
+        bindKey   = Enum.UserInputType.MouseButton2
+    else
+        return
+    end
+
+    local savedCb = kbCallback
     closeKeybindCapture()
-    if kbCallback then kbCallback(key, label) end
+    if savedCb then savedCb(bindKey, bindLabel) end
 end)
 
 -- ╔══════════════════════════════════════════╗
@@ -403,7 +409,7 @@ local aimbotActive=false;  local aimbotSticky=false;  local aimbotLocked=false
 local silentAimActive=false; local silentAimSticky=false; local silentAimLocked=false
 local triggerbotActive=false
 local aimbotTarget=nil; local silentAimTarget=nil
-local aimbotWasHeld=false; local silentAimWasHeld=false
+local aimbotWasHeld=false
 
 local aimbotKeybind=Enum.UserInputType.MouseButton2; local aimbotKeybindLabel="RMB"
 local silentAimKeybind=Enum.KeyCode.Q;               local silentAimKeybindLabel="Q"
@@ -644,7 +650,7 @@ local function makeCombatRow(name, icon, defKeyLabel, onToggle, onKbPicked, onSt
         onToggle(on)
     end)
     kbBtn.MouseButton1Click:Connect(function()
-        openKeybindCapture(name, function(k,l) kbBtn.Text="["..l.."]"; onKbPicked(k,l) end)
+        task.spawn(openKeybindCapture, name, function(k,l) kbBtn.Text="["..l.."]"; onKbPicked(k,l) end)
     end)
     sBtn.MouseButton1Click:Connect(function()
         sOn = not sOn
@@ -681,7 +687,7 @@ local function makeKeybindRow(name, icon, defLabel, onKbPicked, parent)
         TextSize=9, Font=Enum.Font.GothamBold, BorderSizePixel=0}, row)
     corner(kbBtn, 5)
     kbBtn.MouseButton1Click:Connect(function()
-        openKeybindCapture(name, function(k,l) kbBtn.Text="Set: ["..l.."]"; onKbPicked(k,l) end)
+        task.spawn(openKeybindCapture, name, function(k,l) kbBtn.Text="Set: ["..l.."]"; onKbPicked(k,l) end)
     end)
 end
 
@@ -844,79 +850,119 @@ end)
 -- ║           SILENT AIM (fixed)             ║
 -- ╚══════════════════════════════════════════╝
 
-local silentSavedCF = nil
+-- ══════════════════════════════════════════════════════
+--  SILENT AIM
+--  We intercept mouse clicks (LMB) while silent aim is
+--  active and a target is locked. At the moment of the
+--  click we snap the camera to face the target's head,
+--  wait one RenderStepped (so Roblox's tool raycast runs
+--  against the redirected angle), then restore. The view
+--  shift is ~1 frame and completely invisible in-game.
+-- ══════════════════════════════════════════════════════
 
-local function hookTool(tool)
-    tool.Activated:Connect(function()
-        if not silentAimActive or not silentAimTarget then return end
-        local hw = getHeadWorld(silentAimTarget); if not hw then return end
-        silentSavedCF = camera.CFrame
-        camera.CFrame = CFrame.new(silentSavedCF.Position, hw)
-        -- Restore before next frame is rendered (player never sees it)
-        local conn; conn = RunService.RenderStepped:Connect(function()
-            if silentSavedCF then camera.CFrame=silentSavedCF; silentSavedCF=nil end
-            conn:Disconnect()
-        end)
+local silentAimWasHeld = false  -- separate variable, was incorrectly sharing aimbotWasHeld
+
+-- Camera redirect happens on LMB down, which is when tools fire
+UserInputService.InputBegan:Connect(function(inp, gpe)
+    if gpe then return end
+    if inp.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+    if not silentAimActive then return end
+    if not silentAimTarget or not silentAimTarget.Character then return end
+    -- Only redirect if a tool is equipped
+    local tool = character and character:FindFirstChildOfClass("Tool")
+    if not tool then return end
+
+    local hw = getHeadWorld(silentAimTarget)
+    if not hw then return end
+
+    local savedCF = camera.CFrame
+    camera.CFrame  = CFrame.new(savedCF.Position, hw)
+
+    -- Restore the very next rendered frame so player never notices
+    local conn
+    conn = RunService.RenderStepped:Connect(function()
+        camera.CFrame = savedCF
+        conn:Disconnect()
     end)
-end
-
-local function hookCharacterTools(char)
-    for _,c in pairs(char:GetChildren()) do if c:IsA("Tool") then hookTool(c) end end
-    char.ChildAdded:Connect(function(c) if c:IsA("Tool") then hookTool(c) end end)
-end
-
-player.CharacterAdded:Connect(function(char)
-    character=char; humanoid=char:WaitForChild("Humanoid"); rootPart=char:WaitForChild("HumanoidRootPart")
-    hookCharacterTools(char)
 end)
-if player.Character then hookCharacterTools(player.Character) end
 
+-- Silent aim target selection loop
 RunService.RenderStepped:Connect(function()
     if not silentAimActive then
         if silentAimTarget then silentAimTarget=nil; updateAllESPColors() end
-        aimbotWasHeld=false; silentAimLocked=false; return
+        silentAimWasHeld=false; silentAimLocked=false; return
     end
-    local held=isKeyHeld(silentAimKeybind); local jp=held and not aimbotWasHeld
+    local held = isKeyHeld(silentAimKeybind)
+    local jp   = held and not silentAimWasHeld
+
     if silentAimSticky then
         if jp then
-            if silentAimLocked then silentAimLocked=false; silentAimTarget=nil; updateAllESPColors()
-            else silentAimTarget=getNearestEnemy(); silentAimLocked=silentAimTarget~=nil; updateAllESPColors() end
+            if silentAimLocked then
+                silentAimLocked=false; silentAimTarget=nil; updateAllESPColors()
+            else
+                silentAimTarget=getNearestEnemy()
+                silentAimLocked=silentAimTarget~=nil
+                updateAllESPColors()
+            end
         end
         if silentAimLocked and not targetAlive(silentAimTarget) then
-            silentAimTarget=nil; silentAimLocked=false; updateAllESPColors() end
+            silentAimTarget=nil; silentAimLocked=false; updateAllESPColors()
+        end
     else
         if held then
-            local t=getNearestEnemy(); if t~=silentAimTarget then silentAimTarget=t; updateAllESPColors() end
+            local t=getNearestEnemy()
+            if t~=silentAimTarget then silentAimTarget=t; updateAllESPColors() end
         else
             if silentAimTarget then silentAimTarget=nil; updateAllESPColors() end
         end
     end
-    aimbotWasHeld=held
+    silentAimWasHeld = held
 end)
 
--- ╔══════════════════════════════════════════╗
--- ║            TRIGGERBOT                    ║
--- ╚══════════════════════════════════════════╝
+player.CharacterAdded:Connect(function(char)
+    character=char; humanoid=char:WaitForChild("Humanoid"); rootPart=char:WaitForChild("HumanoidRootPart")
+end)
+
+-- ══════════════════════════════════════════════════════
+--  TRIGGERBOT
+--  Raycast from camera centre each frame. If it hits an
+--  enemy, snap the mouse to fire the equipped tool by
+--  simulating mouse1click via VirtualInputManager.
+-- ══════════════════════════════════════════════════════
+
+local vim = game:GetService("VirtualInputManager")
 
 RunService.Heartbeat:Connect(function()
     if not triggerbotActive then return end
     if not isKeyHeld(triggerKeybind) then return end
-    if tick()-lastTriggerShot < TRIGGER_DELAY then return end
-    local ur = camera:ScreenPointToRay(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
-    local rp = RaycastParams.new()
-    rp.FilterDescendantsInstances={player.Character}; rp.FilterType=Enum.RaycastFilterType.Exclude
-    local res = workspace:Raycast(ur.Origin, ur.Direction*500, rp)
-    if res and res.Instance then
-        local hc = res.Instance:FindFirstAncestorOfClass("Model")
-        if hc then
-            local hp = Players:GetPlayerFromCharacter(hc)
-            if hp and hp~=player then
-                local tool = character and character:FindFirstChildOfClass("Tool")
-                if tool then pcall(function() tool.Activated:Fire() end) end
-                lastTriggerShot = tick()
-            end
-        end
-    end
+    if tick() - lastTriggerShot < TRIGGER_DELAY then return end
+
+    local tool = character and character:FindFirstChildOfClass("Tool")
+    if not tool then return end
+
+    -- Raycast from camera centre forward
+    local vp  = camera.ViewportSize
+    local ur  = camera:ScreenPointToRay(vp.X / 2, vp.Y / 2)
+    local rp  = RaycastParams.new()
+    rp.FilterDescendantsInstances = {player.Character}
+    rp.FilterType                 = Enum.RaycastFilterType.Exclude
+
+    local res = workspace:Raycast(ur.Origin, ur.Direction * 1000, rp)
+    if not res then return end
+
+    local hitChar = res.Instance:FindFirstAncestorOfClass("Model")
+    if not hitChar then return end
+    local hitPlayer = Players:GetPlayerFromCharacter(hitChar)
+    if not hitPlayer or hitPlayer == player then return end
+    local hum = hitChar:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return end
+
+    -- Simulate a left-mouse-button click so the tool fires normally
+    pcall(function()
+        vim:SendMouseButtonEvent(vp.X/2, vp.Y/2, 0, true,  game, 1)
+        vim:SendMouseButtonEvent(vp.X/2, vp.Y/2, 0, false, game, 1)
+    end)
+    lastTriggerShot = tick()
 end)
 
 -- ╔══════════════════════════════════════════╗
@@ -959,7 +1005,7 @@ do
         rS.Color=on and Color3.fromRGB(100,60,200) or Color3.fromRGB(55,36,100)
     end)
     kbBtn.MouseButton1Click:Connect(function()
-        openKeybindCapture("Triggerbot",function(k,l) triggerKeybind=k;triggerKeybindLabel=l;kbBtn.Text="["..l.."]" end)
+        task.spawn(openKeybindCapture, "Triggerbot", function(k,l) triggerKeybind=k;triggerKeybindLabel=l;kbBtn.Text="["..l.."]" end)
     end)
 end
 
