@@ -5,6 +5,8 @@ local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local VIM              = game:GetService("VirtualInputManager")
+local Debris           = game:GetService("Debris")
+local TweenService     = game:GetService("TweenService")
 
 local player    = Players.LocalPlayer
 local camera    = workspace.CurrentCamera
@@ -36,6 +38,7 @@ local C = {
     on          = Color3.fromRGB(70,  215, 105),
     off         = Color3.fromRGB(65,  60,  90),
     red         = Color3.fromRGB(195, 45,  65),
+    orange      = Color3.fromRGB(210, 100, 30),
     titleBar    = Color3.fromRGB(55,  22,  125),
 }
 
@@ -77,26 +80,16 @@ local screenGui = make("ScreenGui",{
     IgnoreGuiInset=true,
 },player.PlayerGui)
 
--- Invisible full-screen drag capture (always on top so drag never breaks)
 local dragCapture = make("Frame",{
-    Size=UDim2.new(1,0,1,0),
-    BackgroundTransparency=1,
-    ZIndex=200,
-    Visible=false,
+    Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,ZIndex=200,Visible=false,
 },screenGui)
 
 local mainFrame = make("Frame",{
-    Name="Main",
-    Size=UDim2.new(0,400,0,520),
-    Position=UDim2.new(0,80,0,60),
-    BackgroundColor3=C.bg,
-    BorderSizePixel=0,
-    ClipsDescendants=false,
+    Name="Main",Size=UDim2.new(0,400,0,520),Position=UDim2.new(0,80,0,60),
+    BackgroundColor3=C.bg,BorderSizePixel=0,ClipsDescendants=false,
 },screenGui)
 corner(mainFrame,10)
 stroke(mainFrame,C.accentDim,1.5)
-
--- background gradient
 make("UIGradient",{
     Color=ColorSequence.new({
         ColorSequenceKeypoint.new(0,Color3.fromRGB(13,11,26)),
@@ -105,82 +98,58 @@ make("UIGradient",{
     Rotation=135,
 },mainFrame)
 
--- ── Title bar ────────────────────────────────────────────────────
+-- Title bar
 local titleBar = make("Frame",{
-    Size=UDim2.new(1,0,0,40),
-    BackgroundColor3=C.titleBar,
-    BorderSizePixel=0,
-    ZIndex=2,
+    Size=UDim2.new(1,0,0,40),BackgroundColor3=C.titleBar,BorderSizePixel=0,ZIndex=2,
 },mainFrame)
 corner(titleBar,10)
--- patch lower corners
 make("Frame",{Size=UDim2.new(1,0,0.5,0),Position=UDim2.new(0,0,0.5,0),
     BackgroundColor3=C.titleBar,BorderSizePixel=0,ZIndex=2},titleBar)
+make("TextLabel",{Text="SENETCHA",Size=UDim2.new(0,120,0,22),Position=UDim2.new(0,10,0,9),
+    BackgroundTransparency=1,TextColor3=C.textBright,TextSize=15,Font=Enum.Font.GothamBold,
+    TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3},titleBar)
+make("TextLabel",{Text="Lock Hood",Size=UDim2.new(0,120,0,12),Position=UDim2.new(0,10,0,27),
+    BackgroundTransparency=1,TextColor3=C.accentBright,TextSize=10,Font=Enum.Font.Gotham,
+    TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3},titleBar)
 
-make("TextLabel",{
-    Text="SENETCHA",
-    Size=UDim2.new(0,120,0,22),Position=UDim2.new(0,10,0,9),
-    BackgroundTransparency=1,TextColor3=C.textBright,
-    TextSize=15,Font=Enum.Font.GothamBold,
-    TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,
-},titleBar)
-make("TextLabel",{
-    Text="Lock Hood",
-    Size=UDim2.new(0,120,0,12),Position=UDim2.new(0,10,0,27),
-    BackgroundTransparency=1,TextColor3=C.accentBright,
-    TextSize=10,Font=Enum.Font.Gotham,
-    TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3,
-},titleBar)
-
-local minBtn = make("TextButton",{
-    Text="-",Size=UDim2.new(0,26,0,26),Position=UDim2.new(1,-58,0.5,-13),
-    BackgroundColor3=Color3.fromRGB(50,42,85),TextColor3=C.text,
-    TextSize=18,Font=Enum.Font.GothamBold,BorderSizePixel=0,ZIndex=3,
-},titleBar)
+local minBtn = make("TextButton",{Text="-",Size=UDim2.new(0,26,0,26),Position=UDim2.new(1,-58,0.5,-13),
+    BackgroundColor3=Color3.fromRGB(50,42,85),TextColor3=C.text,TextSize=18,
+    Font=Enum.Font.GothamBold,BorderSizePixel=0,ZIndex=3},titleBar)
 corner(minBtn,6)
 
-local closeBtn2 = make("TextButton",{
-    Text="x",Size=UDim2.new(0,26,0,26),Position=UDim2.new(1,-28,0.5,-13),
-    BackgroundColor3=C.red,TextColor3=C.textBright,
-    TextSize=12,Font=Enum.Font.GothamBold,BorderSizePixel=0,ZIndex=3,
-},titleBar)
-corner(closeBtn2,6)
+local closeBtn = make("TextButton",{Text="x",Size=UDim2.new(0,26,0,26),Position=UDim2.new(1,-28,0.5,-13),
+    BackgroundColor3=C.red,TextColor3=C.textBright,TextSize=12,
+    Font=Enum.Font.GothamBold,BorderSizePixel=0,ZIndex=3},titleBar)
+corner(closeBtn,6)
 
--- ── Tab strip (horizontal row below title) ────────────────────────
-local TAB_NAMES = {"Aiming","Character","Misc","Players"}
+-- Tab strip
+local TAB_NAMES = {"Aiming","Rage","Character","Misc","Players"}
 
 local tabStrip = make("Frame",{
-    Size=UDim2.new(1,0,0,32),
-    Position=UDim2.new(0,0,0,40),
-    BackgroundColor3=C.bg2,
-    BorderSizePixel=0,
+    Size=UDim2.new(1,0,0,32),Position=UDim2.new(0,0,0,40),
+    BackgroundColor3=C.bg2,BorderSizePixel=0,
 },mainFrame)
--- no corner so it sits flush
 
-local tabStripLayout = listLayout(tabStrip,0,Enum.FillDirection.Horizontal)
-padding(tabStrip,6,6,4,4)
+make("UIListLayout",{
+    FillDirection=Enum.FillDirection.Horizontal,
+    Padding=UDim.new(0,2),SortOrder=Enum.SortOrder.LayoutOrder,
+    VerticalAlignment=Enum.VerticalAlignment.Center,
+},tabStrip)
+padding(tabStrip,4,4,3,3)
 
--- Content area
 local contentArea = make("Frame",{
-    Size=UDim2.new(1,0,1,-72),
-    Position=UDim2.new(0,0,0,72),
-    BackgroundTransparency=1,
-    ClipsDescendants=true,
+    Size=UDim2.new(1,0,1,-72),Position=UDim2.new(0,0,0,72),
+    BackgroundTransparency=1,ClipsDescendants=true,
 },mainFrame)
 
--- Build tab buttons + pages
 local tabBtns  = {}
 local tabPages = {}
 
 local function buildPage()
     local sf = make("ScrollingFrame",{
-        Size=UDim2.new(1,0,1,0),
-        BackgroundTransparency=1,
-        BorderSizePixel=0,
-        ScrollBarThickness=3,
-        ScrollBarImageColor3=C.accent,
-        CanvasSize=UDim2.new(0,0,0,0),
-        AutomaticCanvasSize=Enum.AutomaticSize.Y,
+        Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,BorderSizePixel=0,
+        ScrollBarThickness=3,ScrollBarImageColor3=C.accent,
+        CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,
         Visible=false,
     },contentArea)
     listLayout(sf,4)
@@ -190,25 +159,28 @@ end
 
 local function switchTab(name)
     for _,n in ipairs(TAB_NAMES) do
-        if tabPages[n]  then tabPages[n].Visible=(n==name) end
+        if tabPages[n] then tabPages[n].Visible=(n==name) end
         if tabBtns[n] then
-            tabBtns[n].BackgroundColor3 = (n==name) and C.accent or Color3.fromRGB(0,0,0)
-            tabBtns[n].BackgroundTransparency = (n==name) and 0 or 1
-            tabBtns[n].TextColor3 = (n==name) and C.textBright or C.textDim
+            local isRage = (n=="Rage")
+            local active = (n==name)
+            tabBtns[n].BackgroundTransparency = active and 0 or 1
+            tabBtns[n].BackgroundColor3 = active and (isRage and C.orange or C.accent) or Color3.fromRGB(0,0,0)
+            tabBtns[n].TextColor3 = active and C.textBright or C.textDim
         end
     end
 end
 
-for _,name in ipairs(TAB_NAMES) do
+for i,name in ipairs(TAB_NAMES) do
     tabPages[name] = buildPage()
+    local isRage = (name=="Rage")
     local tb = make("TextButton",{
         Text=name,
-        Size=UDim2.new(0,88,1,-8),
+        Size=UDim2.new(0,70,0,24),
         BackgroundColor3=Color3.fromRGB(0,0,0),
         BackgroundTransparency=1,
         TextColor3=C.textDim,
-        TextSize=11,Font=Enum.Font.GothamBold,
-        BorderSizePixel=0,
+        TextSize=10,Font=Enum.Font.GothamBold,
+        BorderSizePixel=0,LayoutOrder=i,
     },tabStrip)
     corner(tb,5)
     tabBtns[name]=tb
@@ -217,122 +189,81 @@ end
 switchTab("Aiming")
 
 local aimPage  = tabPages["Aiming"]
+local ragePage = tabPages["Rage"]
 local charPage = tabPages["Character"]
 local miscPage = tabPages["Misc"]
 local plPage   = tabPages["Players"]
 
--- ── Minimise / Close ──────────────────────────────────────────────
+-- Minimise / Close
 local minimised = false
-closeBtn2.MouseButton1Click:Connect(function() mainFrame.Visible=false end)
+closeBtn.MouseButton1Click:Connect(function() mainFrame.Visible=false end)
 minBtn.MouseButton1Click:Connect(function()
-    minimised = not minimised
-    contentArea.Visible = not minimised
-    tabStrip.Visible    = not minimised
-    mainFrame.Size = minimised and UDim2.new(0,400,0,40) or UDim2.new(0,400,0,520)
-    minBtn.Text = minimised and "+" or "-"
+    minimised=not minimised
+    contentArea.Visible=not minimised
+    tabStrip.Visible=not minimised
+    mainFrame.Size=minimised and UDim2.new(0,400,0,40) or UDim2.new(0,400,0,520)
+    minBtn.Text=minimised and "+" or "-"
 end)
 
--- ── Dragging (rock solid) ─────────────────────────────────────────
+-- Dragging
 do
-    local dragging = false
-    local dragStartMouse = Vector2.zero
-    local dragStartFrame = UDim2.new()
-
+    local dragging=false
+    local dragStartMouse=Vector2.zero
+    local dragStartFrame=UDim2.new()
     titleBar.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            local mp = UserInputService:GetMouseLocation()
-            dragStartMouse = mp
-            dragStartFrame = mainFrame.Position
-            dragCapture.Visible = true   -- capture all mouse events
+        if inp.UserInputType==Enum.UserInputType.MouseButton1 then
+            dragging=true
+            dragStartMouse=UserInputService:GetMouseLocation()
+            dragStartFrame=mainFrame.Position
+            dragCapture.Visible=true
         end
     end)
-
     UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-            dragCapture.Visible = false
+        if inp.UserInputType==Enum.UserInputType.MouseButton1 then
+            dragging=false; dragCapture.Visible=false
         end
     end)
-
     RunService.RenderStepped:Connect(function()
         if not dragging then return end
-        local mp = UserInputService:GetMouseLocation()
-        local delta = mp - dragStartMouse
-        mainFrame.Position = UDim2.new(
-            dragStartFrame.X.Scale,
-            dragStartFrame.X.Offset + delta.X,
-            dragStartFrame.Y.Scale,
-            dragStartFrame.Y.Offset + delta.Y
-        )
+        local mp=UserInputService:GetMouseLocation()
+        local d=mp-dragStartMouse
+        mainFrame.Position=UDim2.new(
+            dragStartFrame.X.Scale,dragStartFrame.X.Offset+d.X,
+            dragStartFrame.Y.Scale,dragStartFrame.Y.Offset+d.Y)
     end)
 end
 
 -- ================================================================
---  KEYBIND CAPTURE  (own ScreenGui, DisplayOrder=999)
+--  KEYBIND CAPTURE
 -- ================================================================
 local kbGui = make("ScreenGui",{
     Name="SenetchaKB",ResetOnSpawn=false,
-    DisplayOrder=999,IgnoreGuiInset=true,
-    Enabled=false,
+    DisplayOrder=999,IgnoreGuiInset=true,Enabled=false,
 },player.PlayerGui)
-
-make("Frame",{
-    Size=UDim2.new(1,0,1,0),
-    BackgroundColor3=Color3.fromRGB(0,0,0),
-    BackgroundTransparency=0.45,
-    BorderSizePixel=0,
-},kbGui)
-
-local kbBox = make("Frame",{
-    Size=UDim2.new(0,300,0,130),
-    Position=UDim2.new(0.5,-150,0.5,-65),
-    BackgroundColor3=C.bg2,BorderSizePixel=0,
-},kbGui)
-corner(kbBox,10)
-stroke(kbBox,C.accent,1.5)
-
-make("TextLabel",{
-    Text="Press any key to bind",
-    Size=UDim2.new(1,0,0,44),Position=UDim2.new(0,0,0,10),
-    BackgroundTransparency=1,TextColor3=C.textBright,
-    TextSize=15,Font=Enum.Font.GothamBold,
-},kbBox)
-
-local kbSub = make("TextLabel",{
-    Text="for: ?",
-    Size=UDim2.new(1,-20,0,18),Position=UDim2.new(0,10,0,52),
-    BackgroundTransparency=1,TextColor3=C.textDim,
-    TextSize=12,Font=Enum.Font.Gotham,
-    TextXAlignment=Enum.TextXAlignment.Left,
-},kbBox)
-
-local kbCancel = make("TextButton",{
-    Text="Cancel  [Esc]",
-    Size=UDim2.new(0,140,0,28),Position=UDim2.new(0.5,-70,1,-36),
-    BackgroundColor3=C.red,TextColor3=C.textBright,
-    TextSize=12,Font=Enum.Font.GothamBold,BorderSizePixel=0,
-},kbBox)
+make("Frame",{Size=UDim2.new(1,0,1,0),BackgroundColor3=Color3.fromRGB(0,0,0),
+    BackgroundTransparency=0.45,BorderSizePixel=0},kbGui)
+local kbBox=make("Frame",{Size=UDim2.new(0,300,0,130),Position=UDim2.new(0.5,-150,0.5,-65),
+    BackgroundColor3=C.bg2,BorderSizePixel=0},kbGui)
+corner(kbBox,10); stroke(kbBox,C.accent,1.5)
+make("TextLabel",{Text="Press any key to bind",Size=UDim2.new(1,0,0,44),Position=UDim2.new(0,0,0,10),
+    BackgroundTransparency=1,TextColor3=C.textBright,TextSize=15,Font=Enum.Font.GothamBold},kbBox)
+local kbSub=make("TextLabel",{Text="for: ?",Size=UDim2.new(1,-20,0,18),Position=UDim2.new(0,10,0,52),
+    BackgroundTransparency=1,TextColor3=C.textDim,TextSize=12,Font=Enum.Font.Gotham,
+    TextXAlignment=Enum.TextXAlignment.Left},kbBox)
+local kbCancel=make("TextButton",{Text="Cancel  [Esc]",Size=UDim2.new(0,140,0,28),
+    Position=UDim2.new(0.5,-70,1,-36),BackgroundColor3=C.red,TextColor3=C.textBright,
+    TextSize=12,Font=Enum.Font.GothamBold,BorderSizePixel=0},kbBox)
 corner(kbCancel,6)
 
-local kbCallback      = nil
-local listeningForKey = false
-
+local kbCallback=nil; local listeningForKey=false
 local function openKeybindCapture(label,cb)
-    kbSub.Text    = "for:  "..label
-    kbCallback    = cb
-    kbGui.Enabled = true
-    listeningForKey = false
-    task.wait()
-    listeningForKey = true
+    kbSub.Text="for:  "..label; kbCallback=cb; kbGui.Enabled=true
+    listeningForKey=false; task.wait(); listeningForKey=true
 end
 local function closeKeybindCapture()
-    listeningForKey   = false
-    kbGui.Enabled     = false
-    kbCallback        = nil
+    listeningForKey=false; kbGui.Enabled=false; kbCallback=nil
 end
 kbCancel.MouseButton1Click:Connect(closeKeybindCapture)
-
 UserInputService.InputBegan:Connect(function(inp,gpe)
     if not listeningForKey then return end
     if inp.UserInputType==Enum.UserInputType.MouseButton1 then return end
@@ -344,45 +275,67 @@ UserInputService.InputBegan:Connect(function(inp,gpe)
     elseif inp.UserInputType==Enum.UserInputType.MouseButton2 then
         bl="RMB"; bk=Enum.UserInputType.MouseButton2
     else return end
-    local saved=kbCallback
-    closeKeybindCapture()
-    if saved then saved(bk,bl) end
+    local saved=kbCallback; closeKeybindCapture(); if saved then saved(bk,bl) end
 end)
 
 -- ================================================================
 --  STATE
 -- ================================================================
-local espActive        = false
-local espBoxOn         = true
-local espHealthOn      = true
-local espNameOn        = true
+local espActive       = false
+local espBoxOn        = true
+local espHealthOn     = true
+local espNameOn       = true
 
-local aimbotActive     = false
-local aimbotSticky     = false
-local aimbotLocked     = false
+-- Legit aimbot (smooth, FOV-gated, looks human)
+local legitAimActive  = false
+local legitAimSticky  = false
+local legitAimLocked  = false
+local legitAimTarget  = nil
+local legitWasHeld    = false
+
+-- Rage aimbot (instant hard lock)
+local rageAimActive   = false
+local rageAimSticky   = false
+local rageAimLocked   = false
+local rageAimTarget   = nil
+local rageWasHeld     = false
+
+-- Orbit
+local orbitActive     = false
+local orbitTarget     = nil
+local orbitAngle      = 0
+local orbitSpeed      = 1.5   -- radians per second
+local orbitHeight     = 15    -- studs above target
+local orbitRadius     = 8     -- studs away horizontally
+local orbitBV         = nil
+local orbitBG         = nil
+
+-- Silent aim
 local silentAimActive  = false
 local silentAimSticky  = false
 local silentAimLocked  = false
+local silentAimTarget  = nil
+local silentWasHeld    = false
+local silentLmbWasDown = false
+
+-- Triggerbot
 local triggerbotActive = false
 local triggerbotSticky = false
 local triggerbotLocked = false
-
-local aimbotTarget     = nil
-local silentAimTarget  = nil
-
-local aimbotKeybind    = Enum.UserInputType.MouseButton2; local aimbotKBL    = "RMB"
-local silentKeybind    = Enum.KeyCode.Q;                  local silentKBL    = "Q"
-local triggerKeybind   = Enum.KeyCode.T;                  local triggerKBL   = "T"
-local flyKeybind       = Enum.KeyCode.F;                  local flyKBL       = "F"
-local noclipKeybind    = Enum.KeyCode.N;                  local noclipKBL    = "N"
-local menuKeybind      = Enum.KeyCode.Insert;             local menuKBL      = "Insert"
-
-local aimbotWasHeld    = false
-local aimBone          = "Head"   -- "Head" or "Torso" — what aimbot/silent aim targets
-local silentWasHeld    = false
 local triggerWasHeld   = false
 
--- defaults match Roblox defaults
+local aimBone          = "Head"
+
+-- Keybinds
+local legitKeybind   = Enum.UserInputType.MouseButton2; local legitKBL   = "RMB"
+local silentKeybind  = Enum.KeyCode.Q;                  local silentKBL  = "Q"
+local triggerKeybind = Enum.KeyCode.T;                  local triggerKBL = "T"
+local rageKeybind    = Enum.UserInputType.MouseButton2; local rageKBL    = "RMB"
+local flyKeybind     = Enum.KeyCode.F;                  local flyKBL     = "F"
+local noclipKeybind  = Enum.KeyCode.N;                  local noclipKBL  = "N"
+local menuKeybind    = Enum.KeyCode.Insert;             local menuKBL    = "Insert"
+
+-- Movement
 local currentSpeed     = 16
 local currentJumpPower = 50
 local flyActive        = false
@@ -391,271 +344,207 @@ local infiniteJump     = false
 local bHop             = false
 local bodyVelocity,bodyGyro,flyConn
 
-local AIMBOT_FOV       = 300
-local AIMBOT_SMOOTH    = 0.13
-local TRIGGER_DELAY    = 0.06
-local lastTriggerShot  = 0
+-- FOV / smoothing
+local LEGIT_FOV       = 120   -- smaller, more legit
+local LEGIT_SMOOTH    = 0.08  -- 0–1: lower = slower/smoother
+local TRIGGER_DELAY   = 0.06
+local lastTriggerShot = 0
 
-local toggleStates = {}   -- [name] = bool, used for active hacks list
+local toggleStates = {}
 local ESP_OBJECTS  = {}
 
--- FOV circle
 local fovCircle = Drawing.new("Circle")
-fovCircle.Visible      = false
-fovCircle.Radius       = AIMBOT_FOV
-fovCircle.Color        = Color3.fromRGB(170,90,255)
-fovCircle.Thickness    = 1.5
-fovCircle.Filled       = false
-fovCircle.Transparency = 1
+fovCircle.Visible=false; fovCircle.Radius=LEGIT_FOV
+fovCircle.Color=Color3.fromRGB(170,90,255); fovCircle.Thickness=1.5
+fovCircle.Filled=false; fovCircle.Transparency=1
 
 -- ================================================================
 --  UI BUILDERS
 -- ================================================================
-
--- Simple toggle row
-local function makeToggle(name, cb, page)
-    page = page or miscPage
-    local row = make("TextButton",{
-        Size=UDim2.new(1,0,0,30),
-        BackgroundColor3=C.bg2,
-        BorderSizePixel=0,Text="",
-    },page)
-    corner(row,6)
-    local rS = stroke(row,C.border,1)
-
-    make("TextLabel",{
-        Text=name,
-        Size=UDim2.new(1,-46,1,0),Position=UDim2.new(0,10,0,0),
-        BackgroundTransparency=1,TextColor3=C.text,
-        TextSize=11,Font=Enum.Font.Gotham,
-        TextXAlignment=Enum.TextXAlignment.Left,
-    },row)
-
-    local dot = make("Frame",{
-        Size=UDim2.new(0,9,0,9),Position=UDim2.new(1,-18,0.5,-4),
-        BackgroundColor3=C.off,BorderSizePixel=0,
-    },row)
-    corner(dot,9)
-
-    toggleStates[name] = false
-    local function setState(on)
-        toggleStates[name]   = on
-        dot.BackgroundColor3 = on and C.on   or C.off
-        row.BackgroundColor3 = on and C.bg3  or C.bg2
-        rS.Color             = on and C.borderOn or C.border
-    end
-
-    row.MouseButton1Click:Connect(function()
-        setState(not toggleStates[name])
-        cb(toggleStates[name])
-    end)
-
-    return setState   -- caller can force state externally
-end
-
--- Slider
-local function makeSlider(name,minV,maxV,defV,suffix,cb,page)
-    page=page or miscPage; suffix=suffix or ""
-    local f = make("Frame",{
-        Size=UDim2.new(1,0,0,46),BackgroundColor3=C.bg2,BorderSizePixel=0,
-    },page)
-    corner(f,6); stroke(f,C.border,1)
-
-    local cv=defV
-    local vL = make("TextLabel",{
-        Text=name..":  "..cv..suffix,
-        Size=UDim2.new(1,-16,0,18),Position=UDim2.new(0,8,0,4),
-        BackgroundTransparency=1,TextColor3=C.text,
-        TextSize=11,Font=Enum.Font.Gotham,
-        TextXAlignment=Enum.TextXAlignment.Left,
-    },f)
-
-    local track = make("Frame",{
-        Size=UDim2.new(1,-16,0,4),Position=UDim2.new(0,8,0,30),
-        BackgroundColor3=C.bg3,BorderSizePixel=0,
-    },f)
-    corner(track,9)
-
-    local fill = make("Frame",{
-        Size=UDim2.new((defV-minV)/(maxV-minV),0,1,0),
-        BackgroundColor3=C.accent,BorderSizePixel=0,
-    },track)
-    corner(fill,9)
-
-    local drag=false
-    track.InputBegan:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=true end
-    end)
-    UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end
-    end)
-    RunService.RenderStepped:Connect(function()
-        if not drag then return end
-        local mp = UserInputService:GetMouseLocation()
-        local r  = math.clamp((mp.X-track.AbsolutePosition.X)/track.AbsoluteSize.X,0,1)
-        cv = math.floor(minV+r*(maxV-minV))
-        fill.Size = UDim2.new(r,0,1,0)
-        vL.Text   = name..":  "..cv..suffix
-        cb(cv)
-    end)
-    return f
-end
-
--- Keybind row
-local function makeKbRow(name,defLabel,onPicked,page)
-    page=page or miscPage
-    local row=make("Frame",{
-        Size=UDim2.new(1,0,0,28),BackgroundColor3=C.bg2,BorderSizePixel=0,
-    },page)
-    corner(row,6); stroke(row,C.border,1)
-
-    make("TextLabel",{
-        Text=name,Size=UDim2.new(1,-148,1,0),Position=UDim2.new(0,8,0,0),
-        BackgroundTransparency=1,TextColor3=C.textDim,
-        TextSize=10,Font=Enum.Font.Gotham,
-        TextXAlignment=Enum.TextXAlignment.Left,
-    },row)
-
-    local kb=make("TextButton",{
-        Text="Set: ["..defLabel.."]",
-        Size=UDim2.new(0,126,0,20),Position=UDim2.new(1,-132,0.5,-10),
-        BackgroundColor3=C.bg3,TextColor3=C.textDim,
-        TextSize=9,Font=Enum.Font.GothamBold,BorderSizePixel=0,
-    },row)
-    corner(kb,5)
-    kb.MouseButton1Click:Connect(function()
-        task.spawn(openKeybindCapture,name,function(k,l)
-            kb.Text="Set: ["..l.."]"; onPicked(k,l)
-        end)
-    end)
-    return kb
-end
-
--- Combat row: name + [KEY] + HOLD/TOGGLE pill + dot
-local function makeCombatRow(name,defKey,onToggle,onKb,onMode,page)
-    page=page or aimPage
-    local row=make("Frame",{
-        Size=UDim2.new(1,0,0,30),BackgroundColor3=C.bg2,BorderSizePixel=0,
-    },page)
-    corner(row,6)
-    local rS=stroke(row,C.border,1)
-
-    make("TextLabel",{
-        Text=name,Size=UDim2.new(1,-200,1,0),Position=UDim2.new(0,10,0,0),
-        BackgroundTransparency=1,TextColor3=C.text,
-        TextSize=11,Font=Enum.Font.Gotham,
-        TextXAlignment=Enum.TextXAlignment.Left,
-    },row)
-
-    local kbBtn=make("TextButton",{
-        Text="["..defKey.."]",
-        Size=UDim2.new(0,56,0,20),Position=UDim2.new(1,-162,0.5,-10),
-        BackgroundColor3=C.bg3,TextColor3=C.textDim,
-        TextSize=10,Font=Enum.Font.GothamBold,BorderSizePixel=0,
-    },row)
-    corner(kbBtn,5); stroke(kbBtn,C.border,1)
-
-    local modeIsToggle=false
-    local modeBtn=make("TextButton",{
-        Text="HOLD",
-        Size=UDim2.new(0,50,0,20),Position=UDim2.new(1,-102,0.5,-10),
-        BackgroundColor3=C.bg3,TextColor3=C.textDim,
-        TextSize=9,Font=Enum.Font.GothamBold,BorderSizePixel=0,
-    },row)
-    corner(modeBtn,5)
-    local mS=stroke(modeBtn,C.border,1)
-
-    local dot=make("Frame",{
-        Size=UDim2.new(0,9,0,9),Position=UDim2.new(1,-16,0.5,-4),
-        BackgroundColor3=C.off,BorderSizePixel=0,
-    },row)
-    corner(dot,9)
-
-    local ta=make("TextButton",{
-        Size=UDim2.new(1,-172,1,0),BackgroundTransparency=1,Text="",
-    },row)
-
-    toggleStates[name]=false
-    ta.MouseButton1Click:Connect(function()
-        toggleStates[name]=not toggleStates[name]
-        local on=toggleStates[name]
-        dot.BackgroundColor3=on and C.on  or C.off
-        row.BackgroundColor3=on and C.bg3 or C.bg2
-        rS.Color=on and C.borderOn or C.border
-        onToggle(on)
-    end)
-    kbBtn.MouseButton1Click:Connect(function()
-        task.spawn(openKeybindCapture,name,function(k,l)
-            kbBtn.Text="["..l.."]"; onKb(k,l)
-        end)
-    end)
-    modeBtn.MouseButton1Click:Connect(function()
-        modeIsToggle=not modeIsToggle
-        if modeIsToggle then
-            modeBtn.Text="TOGGLE"
-            modeBtn.BackgroundColor3=C.accent
-            modeBtn.TextColor3=C.textBright
-            mS.Color=C.accentBright
-        else
-            modeBtn.Text="HOLD"
-            modeBtn.BackgroundColor3=C.bg3
-            modeBtn.TextColor3=C.textDim
-            mS.Color=C.border
-        end
-        onMode(modeIsToggle)
-    end)
-end
-
--- Section header label
 local function sectionLabel(text,page)
     make("TextLabel",{
-        Text=text,
-        Size=UDim2.new(1,0,0,16),
-        BackgroundTransparency=1,
-        TextColor3=C.accentBright,
+        Text=text,Size=UDim2.new(1,0,0,16),
+        BackgroundTransparency=1,TextColor3=C.accentBright,
         TextSize=10,Font=Enum.Font.GothamBold,
         TextXAlignment=Enum.TextXAlignment.Left,
     },page)
 end
 
+local function makeToggle(name,cb,page)
+    page=page or miscPage
+    local row=make("TextButton",{Size=UDim2.new(1,0,0,30),BackgroundColor3=C.bg2,BorderSizePixel=0,Text=""},page)
+    corner(row,6); local rS=stroke(row,C.border,1)
+    make("TextLabel",{Text=name,Size=UDim2.new(1,-46,1,0),Position=UDim2.new(0,10,0,0),
+        BackgroundTransparency=1,TextColor3=C.text,TextSize=11,Font=Enum.Font.Gotham,
+        TextXAlignment=Enum.TextXAlignment.Left},row)
+    local dot=make("Frame",{Size=UDim2.new(0,9,0,9),Position=UDim2.new(1,-18,0.5,-4),
+        BackgroundColor3=C.off,BorderSizePixel=0},row)
+    corner(dot,9)
+    toggleStates[name]=false
+    local function setState(on)
+        toggleStates[name]=on
+        dot.BackgroundColor3=on and C.on or C.off
+        row.BackgroundColor3=on and C.bg3 or C.bg2
+        rS.Color=on and C.borderOn or C.border
+    end
+    row.MouseButton1Click:Connect(function() setState(not toggleStates[name]); cb(toggleStates[name]) end)
+    return setState
+end
+
+local function makeSlider(name,minV,maxV,defV,suffix,cb,page)
+    page=page or miscPage; suffix=suffix or ""
+    local f=make("Frame",{Size=UDim2.new(1,0,0,46),BackgroundColor3=C.bg2,BorderSizePixel=0},page)
+    corner(f,6); stroke(f,C.border,1)
+    local cv=defV
+    local vL=make("TextLabel",{Text=name..":  "..cv..suffix,Size=UDim2.new(1,-16,0,18),
+        Position=UDim2.new(0,8,0,4),BackgroundTransparency=1,TextColor3=C.text,
+        TextSize=11,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left},f)
+    local track=make("Frame",{Size=UDim2.new(1,-16,0,4),Position=UDim2.new(0,8,0,30),
+        BackgroundColor3=C.bg3,BorderSizePixel=0},f)
+    corner(track,9)
+    local fill=make("Frame",{Size=UDim2.new((defV-minV)/(maxV-minV),0,1,0),
+        BackgroundColor3=C.accent,BorderSizePixel=0},track)
+    corner(fill,9)
+    local drag=false
+    track.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=true end end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end end)
+    RunService.RenderStepped:Connect(function()
+        if not drag then return end
+        local mp=UserInputService:GetMouseLocation()
+        local r=math.clamp((mp.X-track.AbsolutePosition.X)/track.AbsoluteSize.X,0,1)
+        cv=math.floor(minV+r*(maxV-minV))
+        fill.Size=UDim2.new(r,0,1,0); vL.Text=name..":  "..cv..suffix; cb(cv)
+    end)
+    return f,function(v) -- setter
+        local r=(v-minV)/(maxV-minV)
+        cv=v; fill.Size=UDim2.new(r,0,1,0); vL.Text=name..":  "..cv..suffix
+    end
+end
+
+local function makeKbRow(name,defLabel,onPicked,page)
+    page=page or miscPage
+    local row=make("Frame",{Size=UDim2.new(1,0,0,28),BackgroundColor3=C.bg2,BorderSizePixel=0},page)
+    corner(row,6); stroke(row,C.border,1)
+    make("TextLabel",{Text=name,Size=UDim2.new(1,-148,1,0),Position=UDim2.new(0,8,0,0),
+        BackgroundTransparency=1,TextColor3=C.textDim,TextSize=10,Font=Enum.Font.Gotham,
+        TextXAlignment=Enum.TextXAlignment.Left},row)
+    local kb=make("TextButton",{Text="Set: ["..defLabel.."]",Size=UDim2.new(0,126,0,20),
+        Position=UDim2.new(1,-132,0.5,-10),BackgroundColor3=C.bg3,TextColor3=C.textDim,
+        TextSize=9,Font=Enum.Font.GothamBold,BorderSizePixel=0},row)
+    corner(kb,5)
+    kb.MouseButton1Click:Connect(function()
+        task.spawn(openKeybindCapture,name,function(k,l) kb.Text="Set: ["..l.."]"; onPicked(k,l) end)
+    end)
+    return kb
+end
+
+-- Combat row: name + [KEY] + HOLD/TOGGLE
+local function makeCombatRow(name,defKey,onToggle,onKb,onMode,page)
+    page=page or aimPage
+    local row=make("Frame",{Size=UDim2.new(1,0,0,30),BackgroundColor3=C.bg2,BorderSizePixel=0},page)
+    corner(row,6); local rS=stroke(row,C.border,1)
+    make("TextLabel",{Text=name,Size=UDim2.new(1,-200,1,0),Position=UDim2.new(0,10,0,0),
+        BackgroundTransparency=1,TextColor3=C.text,TextSize=11,Font=Enum.Font.Gotham,
+        TextXAlignment=Enum.TextXAlignment.Left},row)
+    local kbBtn=make("TextButton",{Text="["..defKey.."]",Size=UDim2.new(0,56,0,20),
+        Position=UDim2.new(1,-162,0.5,-10),BackgroundColor3=C.bg3,TextColor3=C.textDim,
+        TextSize=10,Font=Enum.Font.GothamBold,BorderSizePixel=0},row)
+    corner(kbBtn,5); stroke(kbBtn,C.border,1)
+    local modeIsToggle=false
+    local modeBtn=make("TextButton",{Text="HOLD",Size=UDim2.new(0,50,0,20),
+        Position=UDim2.new(1,-102,0.5,-10),BackgroundColor3=C.bg3,TextColor3=C.textDim,
+        TextSize=9,Font=Enum.Font.GothamBold,BorderSizePixel=0},row)
+    corner(modeBtn,5); local mS=stroke(modeBtn,C.border,1)
+    local dot=make("Frame",{Size=UDim2.new(0,9,0,9),Position=UDim2.new(1,-16,0.5,-4),
+        BackgroundColor3=C.off,BorderSizePixel=0},row)
+    corner(dot,9)
+    local ta=make("TextButton",{Size=UDim2.new(1,-172,1,0),BackgroundTransparency=1,Text=""},row)
+    toggleStates[name]=false
+    ta.MouseButton1Click:Connect(function()
+        toggleStates[name]=not toggleStates[name]; local on=toggleStates[name]
+        dot.BackgroundColor3=on and C.on or C.off
+        row.BackgroundColor3=on and C.bg3 or C.bg2
+        rS.Color=on and C.borderOn or C.border; onToggle(on)
+    end)
+    kbBtn.MouseButton1Click:Connect(function()
+        task.spawn(openKeybindCapture,name,function(k,l) kbBtn.Text="["..l.."]"; onKb(k,l) end)
+    end)
+    modeBtn.MouseButton1Click:Connect(function()
+        modeIsToggle=not modeIsToggle
+        if modeIsToggle then
+            modeBtn.Text="TOGGLE"; modeBtn.BackgroundColor3=C.accent
+            modeBtn.TextColor3=C.textBright; mS.Color=C.accentBright
+        else
+            modeBtn.Text="HOLD"; modeBtn.BackgroundColor3=C.bg3
+            modeBtn.TextColor3=C.textDim; mS.Color=C.border
+        end
+        onMode(modeIsToggle)
+    end)
+end
+
+-- Scroll wheel value row (for orbit speed/height)
+local function makeScrollRow(name,minV,maxV,defV,suffix,cb,page)
+    page=page or ragePage; suffix=suffix or ""
+    local row=make("Frame",{Size=UDim2.new(1,0,0,30),BackgroundColor3=C.bg2,BorderSizePixel=0},page)
+    corner(row,6); stroke(row,C.border,1)
+    local cv=defV
+    make("TextLabel",{Text=name,Size=UDim2.new(1,-140,1,0),Position=UDim2.new(0,10,0,0),
+        BackgroundTransparency=1,TextColor3=C.text,TextSize=11,Font=Enum.Font.Gotham,
+        TextXAlignment=Enum.TextXAlignment.Left},row)
+    local valLbl=make("TextLabel",{Text=tostring(cv)..suffix,Size=UDim2.new(0,60,1,0),
+        Position=UDim2.new(1,-130,0,0),BackgroundTransparency=1,TextColor3=C.accentBright,
+        TextSize=12,Font=Enum.Font.GothamBold},row)
+    local decBtn=make("TextButton",{Text="-",Size=UDim2.new(0,28,0,22),Position=UDim2.new(1,-66,0.5,-11),
+        BackgroundColor3=C.bg3,TextColor3=C.text,TextSize=14,Font=Enum.Font.GothamBold,BorderSizePixel=0},row)
+    corner(decBtn,5)
+    local incBtn=make("TextButton",{Text="+",Size=UDim2.new(0,28,0,22),Position=UDim2.new(1,-34,0.5,-11),
+        BackgroundColor3=C.bg3,TextColor3=C.text,TextSize=14,Font=Enum.Font.GothamBold,BorderSizePixel=0},row)
+    corner(incBtn,5)
+    local step=(maxV-minV)/20
+    local function update(v)
+        cv=math.clamp(v,minV,maxV)
+        valLbl.Text=string.format("%.1f",cv)..suffix; cb(cv)
+    end
+    -- Scroll wheel support
+    row.MouseWheelForward:Connect(function()  update(cv+step) end)
+    row.MouseWheelBackward:Connect(function() update(cv-step) end)
+    decBtn.MouseButton1Click:Connect(function() update(cv-step) end)
+    incBtn.MouseButton1Click:Connect(function() update(cv+step) end)
+    return row
+end
+
 -- ================================================================
---  ESP  (Drawing API — boxes stay square regardless of angle)
+--  ESP  (Drawing API)
 -- ================================================================
 local function getESPColor(p)
-    local locked=(aimbotActive and aimbotTarget==p)or(silentAimActive and silentAimTarget==p)
+    local locked=(legitAimActive and legitAimTarget==p)
+               or(rageAimActive and rageAimTarget==p)
+               or(silentAimActive and silentAimTarget==p)
     return locked and Color3.fromRGB(220,40,40) or Color3.fromRGB(255,255,255)
 end
 
-local function newLine(thickness,color,zindex)
-    local l=Drawing.new("Line")
-    l.Visible=false; l.Color=color or Color3.new(1,1,1)
-    l.Thickness=thickness or 1.5; l.Transparency=1
-    l.ZIndex=zindex or 5
-    return l
+local function newLine(thick,col,zi)
+    local l=Drawing.new("Line"); l.Visible=false; l.Color=col or Color3.new(1,1,1)
+    l.Thickness=thick or 1.5; l.Transparency=1; l.ZIndex=zi or 5; return l
+end
+local function newText2()
+    local t=Drawing.new("Text"); t.Visible=false; t.Color=Color3.new(1,1,1)
+    t.Size=13; t.Font=Drawing.Fonts.UI; t.Outline=true
+    t.OutlineColor=Color3.new(0,0,0); t.Center=true; t.ZIndex=6; return t
 end
 
-local function newText()
-    local t=Drawing.new("Text")
-    t.Visible=false; t.Color=Color3.new(1,1,1)
-    t.Size=13; t.Font=Drawing.Fonts.UI
-    t.Outline=true; t.OutlineColor=Color3.new(0,0,0)
-    t.Center=true; t.ZIndex=6
-    return t
+local function worldToScreen(pos)
+    local sp,vis=camera:WorldToViewportPoint(pos); return sp.X,sp.Y,vis
 end
 
 local function createESP(p)
     if not p.Character or ESP_OBJECTS[p] then return end
     local hrp=p.Character:FindFirstChild("HumanoidRootPart"); if not hrp then return end
-    -- 4 box lines
     local box={newLine(1.5),newLine(1.5),newLine(1.5),newLine(1.5)}
-    -- hp: background + fill (vertical lines to the left of box)
-    local hpBg   = newLine(4, Color3.fromRGB(25,20,40), 4)
-    local hpFill = newLine(3, Color3.fromRGB(60,220,90), 5)
-    -- name
-    local nameTag = newText()
-    nameTag.Text = p.Name
-
-    ESP_OBJECTS[p]={box=box,hpBg=hpBg,hpFill=hpFill,nameTag=nameTag,char=p.Character}
+    local hpBg=newLine(4,Color3.fromRGB(25,20,40),4)
+    local hpFill=newLine(3,Color3.fromRGB(60,220,90),5)
+    local nameTag=newText2(); nameTag.Text=p.Name
+    ESP_OBJECTS[p]={box=box,hpBg=hpBg,hpFill=hpFill,nameTag=nameTag}
 end
 
 local function removeESP(p)
@@ -682,100 +571,67 @@ local function disableESP()
     for p in pairs(ESP_OBJECTS) do removeESP(p) end
 end
 
--- Project a 3D world point to 2D screen, returns x,y,visible
-local function worldToScreen(pos)
-    local sp,vis=camera:WorldToViewportPoint(pos)
-    return sp.X,sp.Y,vis
-end
-
--- ESP render loop
 RunService.RenderStepped:Connect(function()
     for p,o in pairs(ESP_OBJECTS) do
         local char=p.Character
         local hrp=char and char:FindFirstChild("HumanoidRootPart")
         local hum=char and char:FindFirstChildOfClass("Humanoid")
-
-        local alive = hrp~=nil and hum~=nil and hum.Health>0
-
+        local alive=hrp~=nil and hum~=nil and hum.Health>0
         local function hideAll()
             for _,l in ipairs(o.box) do l.Visible=false end
             o.hpBg.Visible=false; o.hpFill.Visible=false; o.nameTag.Visible=false
         end
-
         if not alive then hideAll(); continue end
-
-        -- ── Box ──────────────────────────────────────────────────
-        -- Project head top and foot bottom to get screen height,
-        -- then build a FIXED-WIDTH box from that height so it always
-        -- looks square regardless of camera angle.
         local head=char:FindFirstChild("Head")
-        local hPos = head and head.Position or hrp.Position+Vector3.new(0,1.5,0)
-        local fPos = hrp.Position - Vector3.new(0,3,0)
-
-        local hx,hy,hv = worldToScreen(hPos+Vector3.new(0,0.4,0))
-        local fx,fy,fv = worldToScreen(fPos)
-
-        if not (hv and fv) then hideAll(); continue end
-
-        -- Screen-space box derived purely from projected head/foot
-        local boxH = math.abs(fy-hy)
-        local boxW = boxH * 0.55   -- fixed aspect ratio -> always looks like a box
-        local cx   = (hx+fx)*0.5
-        local top  = math.min(hy,fy)
-        local bot  = math.max(hy,fy)
-        local lft  = cx - boxW*0.5
-        local rgt  = cx + boxW*0.5
-
-        local col  = getESPColor(p)
-        local show = espBoxOn and espActive
-        local tl,tr,bl,br = Vector2.new(lft,top),Vector2.new(rgt,top),
-                             Vector2.new(lft,bot), Vector2.new(rgt,bot)
-
-        o.box[1].From=tl; o.box[1].To=tr; o.box[1].Color=col; o.box[1].Visible=show
-        o.box[2].From=bl; o.box[2].To=br; o.box[2].Color=col; o.box[2].Visible=show
-        o.box[3].From=tl; o.box[3].To=bl; o.box[3].Color=col; o.box[3].Visible=show
-        o.box[4].From=tr; o.box[4].To=br; o.box[4].Color=col; o.box[4].Visible=show
-
-        -- ── Health bar (left of box, same height) ─────────────────
-        local hpShow = espHealthOn and espActive
-        local ratio  = math.clamp(hum.Health/math.max(1,hum.MaxHealth),0,1)
-        local hpX    = lft - 5
-        local hpTop  = Vector2.new(hpX, top)
-        local hpBot  = Vector2.new(hpX, bot)
-        local hpMid  = Vector2.new(hpX, top + boxH*(1-ratio))
-        local hpCol  = Color3.fromRGB(math.floor(220*(1-ratio)),math.floor(220*ratio),40)
-
-        o.hpBg.From=hpTop;  o.hpBg.To=hpBot;   o.hpBg.Visible=hpShow
-        o.hpFill.From=hpMid; o.hpFill.To=hpBot; o.hpFill.Visible=hpShow; o.hpFill.Color=hpCol
-
-        -- ── Name (above box) ─────────────────────────────────────
-        o.nameTag.Visible   = espNameOn and espActive
-        o.nameTag.Position  = Vector2.new(cx, top-16)
-        o.nameTag.Color     = col
+        local hPos=head and head.Position or hrp.Position+Vector3.new(0,1.5,0)
+        local fPos=hrp.Position-Vector3.new(0,3,0)
+        local hx,hy,hv=worldToScreen(hPos+Vector3.new(0,0.4,0))
+        local fx,fy,fv=worldToScreen(fPos)
+        if not(hv and fv) then hideAll(); continue end
+        local boxH=math.abs(fy-hy)
+        local boxW=boxH*0.55
+        local cx=(hx+fx)*0.5
+        local top=math.min(hy,fy); local bot=math.max(hy,fy)
+        local lft=cx-boxW*0.5;    local rgt=cx+boxW*0.5
+        local col=getESPColor(p)
+        local show=espBoxOn and espActive
+        local tl,tr=Vector2.new(lft,top),Vector2.new(rgt,top)
+        local bl,br=Vector2.new(lft,bot), Vector2.new(rgt,bot)
+        o.box[1].From=tl;o.box[1].To=tr;o.box[1].Color=col;o.box[1].Visible=show
+        o.box[2].From=bl;o.box[2].To=br;o.box[2].Color=col;o.box[2].Visible=show
+        o.box[3].From=tl;o.box[3].To=bl;o.box[3].Color=col;o.box[3].Visible=show
+        o.box[4].From=tr;o.box[4].To=br;o.box[4].Color=col;o.box[4].Visible=show
+        local hpShow=espHealthOn and espActive
+        local ratio=math.clamp(hum.Health/math.max(1,hum.MaxHealth),0,1)
+        local hpX=lft-5
+        local hpTop=Vector2.new(hpX,top); local hpBot=Vector2.new(hpX,bot)
+        local hpMid=Vector2.new(hpX,top+boxH*(1-ratio))
+        local hpCol=Color3.fromRGB(math.floor(220*(1-ratio)),math.floor(220*ratio),40)
+        o.hpBg.From=hpTop;o.hpBg.To=hpBot;o.hpBg.Visible=hpShow
+        o.hpFill.From=hpMid;o.hpFill.To=hpBot;o.hpFill.Visible=hpShow;o.hpFill.Color=hpCol
+        o.nameTag.Visible=espNameOn and espActive
+        o.nameTag.Position=Vector2.new(cx,top-16); o.nameTag.Color=col
     end
 end)
 
 Players.PlayerAdded:Connect(function(p)
-    p.CharacterAdded:Connect(function()
-        task.wait(1); if espActive then removeESP(p); createESP(p) end
-    end)
+    p.CharacterAdded:Connect(function() task.wait(1); if espActive then removeESP(p);createESP(p) end end)
 end)
 Players.PlayerRemoving:Connect(function(p)
     removeESP(p)
-    if aimbotTarget==p    then aimbotTarget=nil;    aimbotLocked=false    end
+    if legitAimTarget==p then legitAimTarget=nil; legitAimLocked=false end
+    if rageAimTarget==p  then rageAimTarget=nil;  rageAimLocked=false  end
     if silentAimTarget==p then silentAimTarget=nil; silentAimLocked=false end
     updateAllESPColors()
 end)
 for _,p in pairs(Players:GetPlayers()) do
     if p~=player then
-        p.CharacterAdded:Connect(function()
-            task.wait(1); if espActive then removeESP(p); createESP(p) end
-        end)
+        p.CharacterAdded:Connect(function() task.wait(1); if espActive then removeESP(p);createESP(p) end end)
     end
 end
 
 -- ================================================================
---  TARGETING
+--  TARGETING HELPERS
 -- ================================================================
 local function isKeyHeld(bind)
     if typeof(bind)~="EnumItem" then return false end
@@ -784,65 +640,51 @@ local function isKeyHeld(bind)
     return false
 end
 
--- Returns the screen-space position of the player's HumanoidRootPart (full hitbox centre)
--- for FOV locking — this means your mouse just needs to be over the body, not just the head.
-local function getNearestEnemy()
-    local mp   = UserInputService:GetMouseLocation()
-    local best, bestD = nil, AIMBOT_FOV
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= player and p.Character then
-            local hum = p.Character:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+local function getAimPosition(p)
+    if not p or not p.Character then return nil end
+    if aimBone=="Head" then
+        local h=p.Character:FindFirstChild("Head"); return h and h.Position or nil
+    else
+        local t=p.Character:FindFirstChild("UpperTorso")
+             or p.Character:FindFirstChild("Torso")
+             or p.Character:FindFirstChild("HumanoidRootPart")
+        return t and t.Position or nil
+    end
+end
+
+local function targetAlive(p)
+    if not p or not p.Character then return false end
+    local hum=p.Character:FindFirstChildOfClass("Humanoid")
+    return hum~=nil and hum.Health>0
+end
+
+-- Finds nearest enemy within FOV pixels of mouse
+local function getNearestInFov(fovPx)
+    local mp=UserInputService:GetMouseLocation()
+    local best,bestD=nil,fovPx
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=player and p.Character then
+            local hum=p.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health>0 then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
-                    -- Check HRP (body centre) for FOV distance
-                    local sx, sy, vis = worldToScreen(hrp.Position)
-                    if vis then
-                        local d = (Vector2.new(sx, sy) - mp).Magnitude
-                        -- Also check head and torso so being over any part locks on
-                        local head   = p.Character:FindFirstChild("Head")
-                        local torso  = p.Character:FindFirstChild("UpperTorso")
-                                    or p.Character:FindFirstChild("Torso")
-                        if head then
-                            local hx,hy,hv = worldToScreen(head.Position)
-                            if hv then d = math.min(d,(Vector2.new(hx,hy)-mp).Magnitude) end
-                        end
-                        if torso then
-                            local tx,ty,tv = worldToScreen(torso.Position)
-                            if tv then d = math.min(d,(Vector2.new(tx,ty)-mp).Magnitude) end
-                        end
-                        if d < bestD then bestD = d; best = p end
+                    -- Check HRP, head, and torso — take closest screen distance
+                    local parts={}
+                    parts[#parts+1]=hrp
+                    local h=p.Character:FindFirstChild("Head"); if h then parts[#parts+1]=h end
+                    local t=p.Character:FindFirstChild("UpperTorso") or p.Character:FindFirstChild("Torso")
+                    if t then parts[#parts+1]=t end
+                    local d=math.huge
+                    for _,part in ipairs(parts) do
+                        local sx,sy,vis=worldToScreen(part.Position)
+                        if vis then d=math.min(d,(Vector2.new(sx,sy)-mp).Magnitude) end
                     end
+                    if d<bestD then bestD=d; best=p end
                 end
             end
         end
     end
     return best
-end
-
--- Returns the 3D world position of the chosen aim bone (Head or Torso)
-local function getAimPosition(p)
-    if not p or not p.Character then return nil end
-    if aimBone == "Head" then
-        local h = p.Character:FindFirstChild("Head")
-        return h and h.Position or nil
-    else
-        -- Torso: try R15 UpperTorso first, fall back to R6 Torso, then HRP
-        local t = p.Character:FindFirstChild("UpperTorso")
-               or p.Character:FindFirstChild("Torso")
-               or p.Character:FindFirstChild("HumanoidRootPart")
-        return t and t.Position or nil
-    end
-end
-
--- Keep getHeadWorld as an alias so existing call-sites don't break
-local function getHeadWorld(p)
-    return getAimPosition(p)
-end
-local function targetAlive(p)
-    if not p or not p.Character then return false end
-    local hum=p.Character:FindFirstChildOfClass("Humanoid")
-    return hum~=nil and hum.Health>0
 end
 
 RunService.RenderStepped:Connect(function()
@@ -853,112 +695,210 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ================================================================
---  AIMBOT  — hard lock, tracks target every frame with no lag
+--  LEGIT AIMBOT  (smooth, human-looking, FOV-gated)
 -- ================================================================
-local function doAimLock(target)
-    if not targetAlive(target) then return false end
-    local aimPos = getAimPosition(target)
-    if not aimPos then return false end
-    -- Hard-set camera to look directly at the aim bone every single frame.
-    -- We preserve the camera position and only change the look direction.
-    local cf = camera.CFrame
-    camera.CFrame = CFrame.new(cf.Position, aimPos)
-    return true
-end
-
 RunService.RenderStepped:Connect(function()
-    if not aimbotActive then
-        if aimbotTarget then aimbotTarget=nil; updateAllESPColors() end
-        aimbotWasHeld=false; aimbotLocked=false; return
+    if not legitAimActive then
+        if legitAimTarget then legitAimTarget=nil; updateAllESPColors() end
+        legitWasHeld=false; legitAimLocked=false; return
     end
-    local held = isKeyHeld(aimbotKeybind)
-    local jp   = held and not aimbotWasHeld
+    local held=isKeyHeld(legitKeybind)
+    local jp=held and not legitWasHeld
 
-    if aimbotSticky then
-        -- TOGGLE: press once to lock, press again to unlock
+    if legitAimSticky then
         if jp then
-            if aimbotLocked then
-                aimbotLocked=false; aimbotTarget=nil; updateAllESPColors()
+            if legitAimLocked then
+                legitAimLocked=false; legitAimTarget=nil; updateAllESPColors()
             else
-                aimbotTarget = getNearestEnemy()
-                aimbotLocked = aimbotTarget ~= nil
-                updateAllESPColors()
+                legitAimTarget=getNearestInFov(LEGIT_FOV)
+                legitAimLocked=legitAimTarget~=nil; updateAllESPColors()
             end
         end
-        if aimbotLocked then
-            if not doAimLock(aimbotTarget) then
-                -- target died or left
-                aimbotTarget=nil; aimbotLocked=false; updateAllESPColors()
+        if legitAimLocked then
+            if not targetAlive(legitAimTarget) then
+                legitAimTarget=nil; legitAimLocked=false; updateAllESPColors()
+            else
+                local aimPos=getAimPosition(legitAimTarget)
+                if aimPos then
+                    local cf=camera.CFrame
+                    -- Smooth lerp toward target — feels human, not instant
+                    camera.CFrame=cf:Lerp(CFrame.new(cf.Position,aimPos),LEGIT_SMOOTH)
+                end
             end
         end
     else
-        -- HOLD: lock while key held
         if held then
-            local t = getNearestEnemy()
-            if t ~= aimbotTarget then aimbotTarget=t; updateAllESPColors() end
-            if aimbotTarget then
-                if not doAimLock(aimbotTarget) then
-                    aimbotTarget=nil; updateAllESPColors()
+            local t=getNearestInFov(LEGIT_FOV)
+            if t~=legitAimTarget then legitAimTarget=t; updateAllESPColors() end
+            if legitAimTarget then
+                if not targetAlive(legitAimTarget) then
+                    legitAimTarget=nil; updateAllESPColors()
+                else
+                    local aimPos=getAimPosition(legitAimTarget)
+                    if aimPos then
+                        local cf=camera.CFrame
+                        camera.CFrame=cf:Lerp(CFrame.new(cf.Position,aimPos),LEGIT_SMOOTH)
+                    end
                 end
             end
         else
-            if aimbotTarget then aimbotTarget=nil; updateAllESPColors() end
+            if legitAimTarget then legitAimTarget=nil; updateAllESPColors() end
         end
     end
-    aimbotWasHeld=held
+    legitWasHeld=held
 end)
 
 -- ================================================================
---  SILENT AIM
---  We poll LMB state every RenderStepped instead of using InputBegan
---  because InputBegan fires with gpe=true when clicking in-game,
---  which means the condition "if gpe then return end" was silently
---  blocking every shot. Polling bypasses that entirely.
+--  RAGE AIMBOT  (instant hard lock, no FOV limit)
 -- ================================================================
-local silentLmbWasDown = false
-
 RunService.RenderStepped:Connect(function()
-    -- ── Silent aim LMB redirect (runs every frame) ────────────────
-    if silentAimActive and silentAimTarget then
-        local lmbDown = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
-        local justClicked = lmbDown and not silentLmbWasDown
-        if justClicked then
-            local tool = character and character:FindFirstChildOfClass("Tool")
-            if tool then
-                local aimPos = getAimPosition(silentAimTarget)
+    if not rageAimActive then
+        if rageAimTarget then rageAimTarget=nil; updateAllESPColors() end
+        rageWasHeld=false; rageAimLocked=false; return
+    end
+    local held=isKeyHeld(rageKeybind)
+    local jp=held and not rageWasHeld
+
+    if rageAimSticky then
+        if jp then
+            if rageAimLocked then
+                rageAimLocked=false; rageAimTarget=nil; updateAllESPColors()
+            else
+                -- No FOV limit for rage — just pick closest to mouse anywhere on screen
+                rageAimTarget=getNearestInFov(math.huge)
+                rageAimLocked=rageAimTarget~=nil; updateAllESPColors()
+            end
+        end
+        if rageAimLocked then
+            if not targetAlive(rageAimTarget) then
+                rageAimTarget=nil; rageAimLocked=false; updateAllESPColors()
+            else
+                local aimPos=getAimPosition(rageAimTarget)
                 if aimPos then
-                    -- Snap camera to target for exactly this frame
-                    local savedCF = camera.CFrame
-                    camera.CFrame = CFrame.new(savedCF.Position, aimPos)
-                    -- Schedule restore for next frame so the bullet raycast
-                    -- uses our redirected angle but the player never sees it move
-                    task.defer(function()
-                        camera.CFrame = savedCF
-                    end)
+                    -- Hard lock: directly set camera direction, zero lag
+                    local cf=camera.CFrame
+                    camera.CFrame=CFrame.new(cf.Position,aimPos)
                 end
             end
         end
-        silentLmbWasDown = lmbDown
     else
-        silentLmbWasDown = false
+        if held then
+            local t=getNearestInFov(math.huge)
+            if t~=rageAimTarget then rageAimTarget=t; updateAllESPColors() end
+            if rageAimTarget then
+                if not targetAlive(rageAimTarget) then
+                    rageAimTarget=nil; updateAllESPColors()
+                else
+                    local aimPos=getAimPosition(rageAimTarget)
+                    if aimPos then
+                        local cf=camera.CFrame
+                        camera.CFrame=CFrame.new(cf.Position,aimPos)
+                    end
+                end
+            end
+        else
+            if rageAimTarget then rageAimTarget=nil; updateAllESPColors() end
+        end
+    end
+    rageWasHeld=held
+end)
+
+-- ================================================================
+--  ORBIT  (fly above selected player, circle them)
+-- ================================================================
+local function stopOrbit()
+    orbitActive=false
+    if orbitBV then orbitBV:Destroy(); orbitBV=nil end
+    if orbitBG then orbitBG:Destroy(); orbitBG=nil end
+end
+
+local function startOrbit(target)
+    stopOrbit()
+    if not target or not target.Character then return end
+    orbitTarget=target
+    orbitActive=true
+    orbitAngle=0
+
+    local hrp=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    orbitBV=Instance.new("BodyVelocity")
+    orbitBV.Velocity=Vector3.zero
+    orbitBV.MaxForce=Vector3.new(1e5,1e5,1e5)
+    orbitBV.Parent=hrp
+
+    orbitBG=Instance.new("BodyGyro")
+    orbitBG.MaxTorque=Vector3.new(1e5,1e5,1e5)
+    orbitBG.P=1e4
+    orbitBG.Parent=hrp
+end
+
+RunService.RenderStepped:Connect(function(dt)
+    if not orbitActive then return end
+    if not orbitTarget or not orbitTarget.Character then stopOrbit(); return end
+    local tHrp=orbitTarget.Character:FindFirstChild("HumanoidRootPart")
+    local mHrp=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not tHrp or not mHrp or not orbitBV or not orbitBG then stopOrbit(); return end
+
+    orbitAngle=orbitAngle+orbitSpeed*dt
+
+    local targetPos=tHrp.Position
+    local orbitPos=targetPos + Vector3.new(
+        math.cos(orbitAngle)*orbitRadius,
+        orbitHeight,
+        math.sin(orbitAngle)*orbitRadius
+    )
+
+    -- Move toward orbit position
+    local diff=orbitPos-mHrp.Position
+    orbitBV.Velocity=diff*8   -- spring-like follow, smooth but responsive
+
+    -- Always face the target
+    orbitBG.CFrame=CFrame.new(mHrp.Position,targetPos)
+
+    -- Lock camera to look at target too
+    camera.CFrame=CFrame.new(mHrp.Position,targetPos)
+end)
+
+-- ================================================================
+--  SILENT AIM  (polls LMB each frame, no gpe issue)
+-- ================================================================
+RunService.RenderStepped:Connect(function()
+    -- Redirect happens first, before target selection logic
+    if silentAimActive and silentAimTarget then
+        local lmbDown=UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+        local justClicked=lmbDown and not silentLmbWasDown
+        if justClicked then
+            local tool=character and character:FindFirstChildOfClass("Tool")
+            if tool then
+                local aimPos=getAimPosition(silentAimTarget)
+                if aimPos then
+                    local savedCF=camera.CFrame
+                    camera.CFrame=CFrame.new(savedCF.Position,aimPos)
+                    -- Restore next frame — task.defer runs before next render
+                    task.defer(function() camera.CFrame=savedCF end)
+                end
+            end
+        end
+        silentLmbWasDown=lmbDown
+    else
+        silentLmbWasDown=false
     end
 
-    -- ── Target selection loop ─────────────────────────────────────
+    -- Target selection
     if not silentAimActive then
         if silentAimTarget then silentAimTarget=nil; updateAllESPColors() end
         silentWasHeld=false; silentAimLocked=false; return
     end
     local held=isKeyHeld(silentKeybind)
     local jp=held and not silentWasHeld
-
     if silentAimSticky then
         if jp then
             if silentAimLocked then
                 silentAimLocked=false; silentAimTarget=nil; updateAllESPColors()
             else
-                silentAimTarget=getNearestEnemy()
-                silentAimLocked=silentAimTarget~=nil
-                updateAllESPColors()
+                silentAimTarget=getNearestInFov(LEGIT_FOV)
+                silentAimLocked=silentAimTarget~=nil; updateAllESPColors()
             end
         end
         if silentAimLocked and not targetAlive(silentAimTarget) then
@@ -966,13 +906,17 @@ RunService.RenderStepped:Connect(function()
         end
     else
         if held then
-            local t=getNearestEnemy()
+            local t=getNearestInFov(LEGIT_FOV)
             if t~=silentAimTarget then silentAimTarget=t; updateAllESPColors() end
         else
             if silentAimTarget then silentAimTarget=nil; updateAllESPColors() end
         end
     end
     silentWasHeld=held
+end)
+
+player.CharacterAdded:Connect(function(char)
+    character=char; humanoid=char:WaitForChild("Humanoid"); rootPart=char:WaitForChild("HumanoidRootPart")
 end)
 
 -- ================================================================
@@ -982,30 +926,25 @@ RunService.Heartbeat:Connect(function()
     if not triggerbotActive then return end
     local held=isKeyHeld(triggerKeybind)
     local jp=held and not triggerWasHeld
-
     if triggerbotSticky then
         if jp then triggerbotLocked=not triggerbotLocked end
-        triggerWasHeld=held
-        if not triggerbotLocked then return end
+        triggerWasHeld=held; if not triggerbotLocked then return end
     else
-        triggerWasHeld=held
-        if not held then return end
+        triggerWasHeld=held; if not held then return end
     end
-
     if tick()-lastTriggerShot<TRIGGER_DELAY then return end
     local tool=character and character:FindFirstChildOfClass("Tool"); if not tool then return end
     local mp=UserInputService:GetMouseLocation()
     local ur=camera:ScreenPointToRay(mp.X,mp.Y)
     local rp=RaycastParams.new()
-    rp.FilterDescendantsInstances={player.Character}
-    rp.FilterType=Enum.RaycastFilterType.Exclude
+    rp.FilterDescendantsInstances={player.Character}; rp.FilterType=Enum.RaycastFilterType.Exclude
     local res=workspace:Raycast(ur.Origin,ur.Direction*1000,rp)
     if not res then return end
     local hc=res.Instance:FindFirstAncestorOfClass("Model"); if not hc then return end
     local hp=Players:GetPlayerFromCharacter(hc); if not hp or hp==player then return end
     local hum=hc:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
     pcall(function()
-        VIM:SendMouseButtonEvent(mp.X,mp.Y,0,true, game,1)
+        VIM:SendMouseButtonEvent(mp.X,mp.Y,0,true,game,1)
         VIM:SendMouseButtonEvent(mp.X,mp.Y,0,false,game,1)
     end)
     lastTriggerShot=tick()
@@ -1014,88 +953,51 @@ end)
 -- ================================================================
 --  BUILD  ──  AIMING TAB
 -- ================================================================
-
-sectionLabel("ESP", aimPage)
-makeToggle("ESP  -  Master Enable",function(on)
-    espActive=on; if on then enableESP() else disableESP() end
-end,aimPage)
-makeToggle("ESP  -  Box",          function(on) espBoxOn=on    end, aimPage)
-makeToggle("ESP  -  Health Bar",   function(on) espHealthOn=on end, aimPage)
-makeToggle("ESP  -  Name",         function(on) espNameOn=on   end, aimPage)
-makeToggle("Show FOV Circle",      function(on) fovCircle.Visible=on end, aimPage)
-makeSlider("FOV Radius",20,800,300,"px",function(v) AIMBOT_FOV=v; fovCircle.Radius=v end, aimPage)
-
--- Aim bone selector (Head / Torso)
+sectionLabel("AIM BONE", aimPage)
 do
-    local boneLabel = Instance.new("TextLabel")
-    boneLabel.Text                = "Aim Bone:"
-    boneLabel.Size                = UDim2.new(0, 70, 0, 28)
-    boneLabel.BackgroundTransparency = 1
-    boneLabel.TextColor3          = C.textDim
-    boneLabel.TextSize            = 10
-    boneLabel.Font                = Enum.Font.Gotham
-    boneLabel.TextXAlignment      = Enum.TextXAlignment.Left
-    boneLabel.Parent              = aimPage
-
-    local boneRow = Instance.new("Frame")
-    boneRow.Size             = UDim2.new(1, 0, 0, 28)
-    boneRow.BackgroundTransparency = 1
-    boneRow.Parent           = aimPage
-
-    local boneLayout = Instance.new("UIListLayout")
-    boneLayout.FillDirection = Enum.FillDirection.Horizontal
-    boneLayout.Padding       = UDim.new(0, 6)
-    boneLayout.Parent        = boneRow
-
+    local boneRow=make("Frame",{Size=UDim2.new(1,0,0,28),BackgroundTransparency=1},aimPage)
+    make("UIListLayout",{FillDirection=Enum.FillDirection.Horizontal,Padding=UDim.new(0,6)},boneRow)
     local function makeBoneBtn(label)
-        local b = Instance.new("TextButton")
-        b.Size             = UDim2.new(0, 88, 1, 0)
-        b.BackgroundColor3 = C.bg3
-        b.TextColor3       = C.textDim
-        b.Text             = label
-        b.TextSize         = 11
-        b.Font             = Enum.Font.GothamBold
-        b.BorderSizePixel  = 0
-        b.Parent           = boneRow
-        local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,5); c.Parent = b
-        local s = Instance.new("UIStroke"); s.Color = C.border; s.Thickness = 1; s.Parent = b
-        return b, s
+        local b=make("TextButton",{Text=label,Size=UDim2.new(0,88,1,0),
+            BackgroundColor3=C.bg3,TextColor3=C.textDim,TextSize=11,
+            Font=Enum.Font.GothamBold,BorderSizePixel=0},boneRow)
+        corner(b,5); local s=stroke(b,C.border,1); return b,s
     end
-
-    local headBtn,  headS  = makeBoneBtn("Head")
-    local torsoBtn, torsoS = makeBoneBtn("Torso")
-
+    local headBtn,headS=makeBoneBtn("Head")
+    local torsoBtn,torsoS=makeBoneBtn("Torso")
     local function selectBone(bone)
-        aimBone = bone
-        headBtn.BackgroundColor3  = bone=="Head"  and C.accent or C.bg3
-        headBtn.TextColor3        = bone=="Head"  and C.textBright or C.textDim
-        headS.Color               = bone=="Head"  and C.accentBright or C.border
-        torsoBtn.BackgroundColor3 = bone=="Torso" and C.accent or C.bg3
-        torsoBtn.TextColor3       = bone=="Torso" and C.textBright or C.textDim
-        torsoS.Color              = bone=="Torso" and C.accentBright or C.border
+        aimBone=bone
+        headBtn.BackgroundColor3 =bone=="Head"  and C.accent or C.bg3
+        headBtn.TextColor3       =bone=="Head"  and C.textBright or C.textDim
+        headS.Color              =bone=="Head"  and C.accentBright or C.border
+        torsoBtn.BackgroundColor3=bone=="Torso" and C.accent or C.bg3
+        torsoBtn.TextColor3      =bone=="Torso" and C.textBright or C.textDim
+        torsoS.Color             =bone=="Torso" and C.accentBright or C.border
     end
-
-    selectBone("Head")  -- default
+    selectBone("Head")
     headBtn.MouseButton1Click:Connect(function()  selectBone("Head")  end)
     torsoBtn.MouseButton1Click:Connect(function() selectBone("Torso") end)
 end
 
-sectionLabel("AIMBOT", aimPage)
-makeCombatRow("Aimbot  (Camera Lock)",aimbotKBL,
-    function(on) aimbotActive=on; if not on then aimbotTarget=nil; aimbotLocked=false; updateAllESPColors() end end,
-    function(k,l) aimbotKeybind=k; aimbotKBL=l; aimbotTarget=nil; aimbotLocked=false; updateAllESPColors() end,
-    function(tog) aimbotSticky=tog; aimbotTarget=nil; aimbotLocked=false; updateAllESPColors() end,
+sectionLabel("LEGIT AIMBOT  (smooth / FOV-gated)", aimPage)
+makeCombatRow("Legit Aimbot",legitKBL,
+    function(on) legitAimActive=on; if not on then legitAimTarget=nil;legitAimLocked=false;updateAllESPColors() end end,
+    function(k,l) legitKeybind=k; legitKBL=l end,
+    function(tog) legitAimSticky=tog; legitAimTarget=nil;legitAimLocked=false;updateAllESPColors() end,
     aimPage)
+makeSlider("Smoothness",1,20,8,"",function(v) LEGIT_SMOOTH=v/100 end, aimPage)
+makeSlider("FOV Size",20,500,120,"px",function(v) LEGIT_FOV=v; fovCircle.Radius=v end, aimPage)
+makeToggle("Show FOV Circle",function(on) fovCircle.Visible=on end, aimPage)
 
 sectionLabel("SILENT AIM", aimPage)
-makeCombatRow("Silent Aim  (No Camera Move)",silentKBL,
-    function(on) silentAimActive=on; if not on then silentAimTarget=nil; silentAimLocked=false; updateAllESPColors() end end,
-    function(k,l) silentKeybind=k; silentKBL=l; silentAimTarget=nil; silentAimLocked=false; updateAllESPColors() end,
-    function(tog) silentAimSticky=tog; silentAimTarget=nil; silentAimLocked=false; updateAllESPColors() end,
+makeCombatRow("Silent Aim",silentKBL,
+    function(on) silentAimActive=on; if not on then silentAimTarget=nil;silentAimLocked=false;updateAllESPColors() end end,
+    function(k,l) silentKeybind=k; silentKBL=l end,
+    function(tog) silentAimSticky=tog; silentAimTarget=nil;silentAimLocked=false;updateAllESPColors() end,
     aimPage)
 
 sectionLabel("TRIGGERBOT", aimPage)
-makeCombatRow("Triggerbot  (Auto Shoot)",triggerKBL,
+makeCombatRow("Triggerbot",triggerKBL,
     function(on) triggerbotActive=on; if not on then triggerbotLocked=false end end,
     function(k,l) triggerKeybind=k; triggerKBL=l end,
     function(tog) triggerbotSticky=tog; triggerbotLocked=false end,
@@ -1108,26 +1010,63 @@ makeToggle("God Mode  (Local)",function(on)
 end, aimPage)
 
 -- ================================================================
+--  BUILD  ──  RAGE TAB
+-- ================================================================
+sectionLabel("RAGE AIMBOT  (instant / no FOV limit)", ragePage)
+makeCombatRow("Rage Aimbot",rageKBL,
+    function(on) rageAimActive=on; if not on then rageAimTarget=nil;rageAimLocked=false;updateAllESPColors() end end,
+    function(k,l) rageKeybind=k; rageKBL=l end,
+    function(tog) rageAimSticky=tog; rageAimTarget=nil;rageAimLocked=false;updateAllESPColors() end,
+    ragePage)
+
+sectionLabel("ORBIT", ragePage)
+make("TextLabel",{
+    Text="Select a player from the Players tab then enable Orbit.",
+    Size=UDim2.new(1,0,0,28),BackgroundTransparency=1,TextColor3=C.textDim,
+    TextSize=10,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,
+},ragePage)
+
+makeToggle("Orbit  (selected player)",function(on)
+    if on then
+        if orbitTarget then startOrbit(orbitTarget)
+        else
+            toggleStates["Orbit  (selected player)"]=false
+            make("TextLabel",{Text="No player selected. Use Players tab.",
+                Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,TextColor3=C.red,
+                TextSize=10,Font=Enum.Font.Gotham},ragePage)
+        end
+    else stopOrbit() end
+end, ragePage)
+
+makeScrollRow("Orbit Speed",0.5,8,1.5," r/s",function(v) orbitSpeed=v end, ragePage)
+makeScrollRow("Orbit Height",4,60,15," st",function(v) orbitHeight=v end, ragePage)
+makeScrollRow("Orbit Radius",3,40,8," st",function(v) orbitRadius=v end, ragePage)
+
+-- ================================================================
 --  BUILD  ──  CHARACTER TAB
 -- ================================================================
+sectionLabel("ESP", charPage)
+makeToggle("ESP  -  Master Enable",function(on)
+    espActive=on; if on then enableESP() else disableESP() end
+end, charPage)
+makeToggle("ESP  -  Box",        function(on) espBoxOn=on    end, charPage)
+makeToggle("ESP  -  Health Bar", function(on) espHealthOn=on end, charPage)
+makeToggle("ESP  -  Name",       function(on) espNameOn=on   end, charPage)
 
 sectionLabel("MOVEMENT", charPage)
 makeSlider("Walk Speed",16,300,16,"",function(v) currentSpeed=v end, charPage)
 makeSlider("Jump Power",50,500,50,"",function(v) currentJumpPower=v end, charPage)
 makeToggle("Infinite Jump",function(on) infiniteJump=on end, charPage)
-
 makeToggle("Fly  (W/A/S/D  Space/Ctrl)",function(on)
     flyActive=on
     character=player.Character; if not character then return end
     rootPart=character:FindFirstChild("HumanoidRootPart")
     if on then
         bodyVelocity=Instance.new("BodyVelocity")
-        bodyVelocity.Velocity=Vector3.zero
-        bodyVelocity.MaxForce=Vector3.new(1e5,1e5,1e5)
+        bodyVelocity.Velocity=Vector3.zero; bodyVelocity.MaxForce=Vector3.new(1e5,1e5,1e5)
         bodyVelocity.Parent=rootPart
         bodyGyro=Instance.new("BodyGyro")
-        bodyGyro.MaxTorque=Vector3.new(1e5,1e5,1e5)
-        bodyGyro.P=1e4; bodyGyro.Parent=rootPart
+        bodyGyro.MaxTorque=Vector3.new(1e5,1e5,1e5); bodyGyro.P=1e4; bodyGyro.Parent=rootPart
         flyConn=RunService.RenderStepped:Connect(function()
             if not flyActive then return end
             local cam=workspace.CurrentCamera; local dir=Vector3.zero
@@ -1147,19 +1086,15 @@ makeToggle("Fly  (W/A/S/D  Space/Ctrl)",function(on)
     end
 end, charPage)
 makeKbRow("Fly Keybind",flyKBL,function(k,l) flyKeybind=k; flyKBL=l end, charPage)
-
 makeToggle("Noclip",function(on) noclipActive=on end, charPage)
 makeKbRow("Noclip Keybind",noclipKBL,function(k,l) noclipKeybind=k; noclipKBL=l end, charPage)
-
 makeToggle("Bunny Hop",function(on)
     bHop=on
     if on then task.spawn(function()
         while bHop do
-            local c=player.Character
-            local hum=c and c:FindFirstChildOfClass("Humanoid")
+            local c=player.Character; local hum=c and c:FindFirstChildOfClass("Humanoid")
             if hum and hum.FloorMaterial~=Enum.Material.Air then
-                hum:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
+                hum:ChangeState(Enum.HumanoidStateType.Jumping) end
             task.wait(0.05)
         end
     end) end
@@ -1167,14 +1102,12 @@ end, charPage)
 
 sectionLabel("VISUAL", charPage)
 makeToggle("Fullbright",function(on)
-    local L=game:GetService("Lighting")
-    L.Brightness=on and 10 or 1
+    local L=game:GetService("Lighting"); L.Brightness=on and 10 or 1
     L.Ambient=on and Color3.fromRGB(255,255,255) or Color3.fromRGB(70,70,70)
     L.OutdoorAmbient=on and Color3.fromRGB(255,255,255) or Color3.fromRGB(127,127,127)
 end, charPage)
 makeToggle("Remove Fog",function(on)
-    local L=game:GetService("Lighting")
-    L.FogEnd=on and 1e6 or 1000; L.FogStart=on and 1e6 or 0
+    local L=game:GetService("Lighting"); L.FogEnd=on and 1e6 or 1000; L.FogStart=on and 1e6 or 0
 end, charPage)
 makeToggle("Third Person Unlock",function(on)
     player.CameraMaxZoomDistance=on and 200 or 12.5
@@ -1185,10 +1118,8 @@ makeToggle("Rainbow Character",function(on)
             local c=player.Character
             if c then for _,p in pairs(c:GetDescendants()) do
                 if p:IsA("BasePart") and p.Name~="HumanoidRootPart" then
-                    p.Color=Color3.fromHSV(tick()%5/5,1,1)
-                end
-            end end
-            task.wait(0.05)
+                    p.Color=Color3.fromHSV(tick()%5/5,1,1) end
+            end end; task.wait(0.05)
         end
     end) end
 end, charPage)
@@ -1196,168 +1127,19 @@ end, charPage)
 -- ================================================================
 --  BUILD  ──  MISC TAB
 -- ================================================================
-
 sectionLabel("MENU", miscPage)
 makeKbRow("Open / Close Menu",menuKBL,function(k,l) menuKeybind=k; menuKBL=l end, miscPage)
 
--- ================================================================
---  ACTIVE HACKS OVERLAY  (separate ScreenGui, draggable, always on screen)
--- ================================================================
-local hacksGui = Instance.new("ScreenGui")
-hacksGui.Name          = "SenetchaHacks"
-hacksGui.ResetOnSpawn  = false
-hacksGui.DisplayOrder  = 10
-hacksGui.IgnoreGuiInset= true
-hacksGui.Parent        = player.PlayerGui
-
-local hacksWin = Instance.new("Frame")
-hacksWin.Size             = UDim2.new(0, 190, 0, 22)
-hacksWin.Position         = UDim2.new(1, -210, 0, 80)
-hacksWin.BackgroundColor3 = Color3.fromRGB(8, 7, 16)
-hacksWin.BorderSizePixel  = 0
-hacksWin.ClipsDescendants = true
-hacksWin.Parent           = hacksGui
-corner(hacksWin, 7)
-stroke(hacksWin, C.accentDim, 1.5)
-
-local hacksTitle = Instance.new("Frame")
-hacksTitle.Size             = UDim2.new(1, 0, 0, 22)
-hacksTitle.BackgroundColor3 = C.titleBar
-hacksTitle.BorderSizePixel  = 0
-hacksTitle.Parent           = hacksWin
-corner(hacksTitle, 7)
--- patch lower corners
-local hacksTitleFix = Instance.new("Frame")
-hacksTitleFix.Size             = UDim2.new(1, 0, 0.5, 0)
-hacksTitleFix.Position         = UDim2.new(0, 0, 0.5, 0)
-hacksTitleFix.BackgroundColor3 = C.titleBar
-hacksTitleFix.BorderSizePixel  = 0
-hacksTitleFix.Parent           = hacksTitle
-
-local hacksTitleLbl = Instance.new("TextLabel")
-hacksTitleLbl.Text                = "Active Hacks"
-hacksTitleLbl.Size                = UDim2.new(1, -8, 1, 0)
-hacksTitleLbl.Position            = UDim2.new(0, 8, 0, 0)
-hacksTitleLbl.BackgroundTransparency = 1
-hacksTitleLbl.TextColor3          = C.textBright
-hacksTitleLbl.TextSize            = 11
-hacksTitleLbl.Font                = Enum.Font.GothamBold
-hacksTitleLbl.TextXAlignment      = Enum.TextXAlignment.Left
-hacksTitleLbl.Parent              = hacksTitle
-
-local hacksScroll = Instance.new("ScrollingFrame")
-hacksScroll.Size                = UDim2.new(1, 0, 1, -22)
-hacksScroll.Position            = UDim2.new(0, 0, 0, 22)
-hacksScroll.BackgroundTransparency = 1
-hacksScroll.BorderSizePixel     = 0
-hacksScroll.ScrollBarThickness  = 2
-hacksScroll.ScrollBarImageColor3= C.accent
-hacksScroll.CanvasSize          = UDim2.new(0, 0, 0, 0)
-hacksScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-hacksScroll.Parent              = hacksWin
-listLayout(hacksScroll, 0)
-
--- Dragging
-do
-    local hDrag   = false
-    local hStart  = Vector2.zero
-    local hOrigin = UDim2.new()
-
-    hacksTitle.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            hDrag   = true
-            hStart  = UserInputService:GetMouseLocation()
-            hOrigin = hacksWin.Position
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            hDrag = false
-        end
-    end)
-    RunService.RenderStepped:Connect(function()
-        if not hDrag then return end
-        local mp = UserInputService:GetMouseLocation()
-        local d  = mp - hStart
-        hacksWin.Position = UDim2.new(
-            hOrigin.X.Scale, hOrigin.X.Offset + d.X,
-            hOrigin.Y.Scale, hOrigin.Y.Offset + d.Y
-        )
-    end)
-end
-
--- Build rows after all toggleStates are populated
-local hackRows = {}
-
-local function buildHackRows()
-    local names = {}
-    for name in pairs(toggleStates) do
-        names[#names + 1] = name
-    end
-    table.sort(names)
-
-    for _, name in ipairs(names) do
-        local row = Instance.new("Frame")
-        row.Size             = UDim2.new(1, 0, 0, 20)
-        row.BackgroundTransparency = 1
-        row.BorderSizePixel  = 0
-        row.Parent           = hacksScroll
-
-        local dot = Instance.new("Frame")
-        dot.Size             = UDim2.new(0, 7, 0, 7)
-        dot.Position         = UDim2.new(0, 8, 0.5, -3)
-        dot.BackgroundColor3 = C.off
-        dot.BorderSizePixel  = 0
-        dot.Parent           = row
-        corner(dot, 7)
-
-        local lbl = Instance.new("TextLabel")
-        lbl.Text                  = name
-        lbl.Size                  = UDim2.new(1, -24, 1, 0)
-        lbl.Position              = UDim2.new(0, 22, 0, 0)
-        lbl.BackgroundTransparency= 1
-        lbl.TextColor3            = C.textDim
-        lbl.TextSize              = 10
-        lbl.Font                  = Enum.Font.Gotham
-        lbl.TextXAlignment        = Enum.TextXAlignment.Left
-        lbl.TextTruncate          = Enum.TextTruncate.AtEnd
-        lbl.Parent                = row
-
-        hackRows[name] = { dot = dot, lbl = lbl }
-    end
-
-    -- resize window to fit (max 300px)
-    hacksWin.Size = UDim2.new(0, 190, 0, math.min(22 + #names * 20, 300))
-end
-
--- Update dot colours and label brightness every frame
-RunService.Heartbeat:Connect(function()
-    for name, r in pairs(hackRows) do
-        local on = toggleStates[name] == true
-        r.dot.BackgroundColor3 = on and C.on or C.off
-        r.lbl.TextColor3       = on and C.textBright or C.textDim
-    end
-end)
-
--- Run after all makeToggle() calls have registered their names
-task.defer(buildHackRows)
-
--- Note in misc tab pointing to the overlay
-make("TextLabel", {
-    Text = "Active hacks overlay is always visible on screen (drag its title to move it)",
-    Size = UDim2.new(1, 0, 0, 36),
-    BackgroundTransparency = 1,
-    TextColor3 = C.textDim,
-    TextSize = 10, Font = Enum.Font.Gotham,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    TextWrapped = true,
-}, miscPage)
+make("TextLabel",{
+    Text="Active hacks shown in floating overlay (drag its title bar to move it)",
+    Size=UDim2.new(1,0,0,28),BackgroundTransparency=1,TextColor3=C.textDim,
+    TextSize=10,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,
+},miscPage)
 
 sectionLabel("UTILITY", miscPage)
 makeToggle("Anti-AFK",function(on)
     if on then task.spawn(function()
-        while toggleStates["Anti-AFK"] do
-            task.wait(55)
+        while toggleStates["Anti-AFK"] do task.wait(55)
             pcall(function() VIM:SendKeyEvent(true,"LeftShift",false,game) end)
         end
     end) end
@@ -1372,14 +1154,12 @@ local function stopSpectate()
     if spectateConn then spectateConn:Disconnect(); spectateConn=nil end
     spectating=nil
     camera.CameraType=Enum.CameraType.Custom
-    local c=player.Character
-    if c then camera.CameraSubject=c:FindFirstChildOfClass("Humanoid") end
+    local c=player.Character; if c then camera.CameraSubject=c:FindFirstChildOfClass("Humanoid") end
 end
 
 local function startSpectate(target)
     stopSpectate(); if not target.Character then return end
-    spectating=target
-    camera.CameraType=Enum.CameraType.Follow
+    spectating=target; camera.CameraType=Enum.CameraType.Follow
     camera.CameraSubject=target.Character:FindFirstChildOfClass("Humanoid")
     spectateConn=target.CharacterAdded:Connect(function(char)
         task.wait(1); camera.CameraSubject=char:FindFirstChildOfClass("Humanoid")
@@ -1388,72 +1168,38 @@ end
 
 local function flingPlayer(target)
     if not target.Character then return end
-    local tHrp = target.Character:FindFirstChild("HumanoidRootPart")
-    local mHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    local tHrp=target.Character:FindFirstChild("HumanoidRootPart")
+    local mHrp=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     if not tHrp or not mHrp then return end
-
     task.spawn(function()
-        -- Step 1: teleport our character directly onto the target
-        mHrp.CFrame = tHrp.CFrame * CFrame.new(0, 0, 0)
-
-        -- Step 2: disable our character collision so we phase into them
-        for _, part in ipairs(player.Character:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = false end
+        mHrp.CFrame=tHrp.CFrame
+        for _,part in ipairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide=false end
         end
-
-        -- Step 3: apply a massive spinning BodyAngularVelocity to OUR root
-        --         and simultaneously slam a BodyVelocity into the TARGET.
-        --         Because we are overlapping them the physics engine transfers force.
-        local myBav = Instance.new("BodyAngularVelocity")
-        myBav.AngularVelocity = Vector3.new(0, 9999, 0)
-        myBav.MaxTorque       = Vector3.new(0, math.huge, 0)
-        myBav.P               = math.huge
-        myBav.Parent          = mHrp
-
-        -- Hit them with a direct velocity burst every tick for 0.2s
-        local elapsed = 0
-        local directions = {
-            Vector3.new( 1, 2.5,  1),
-            Vector3.new(-1, 2.5, -1),
-            Vector3.new( 1, 2.5, -1),
-            Vector3.new(-1, 2.5,  1),
-        }
-        local i = 0
-        local conn = RunService.Heartbeat:Connect(function(dt)
-            elapsed = elapsed + dt
-            if not tHrp or not tHrp.Parent then return end
-            i = (i % #directions) + 1
-            local dir = directions[i]
-            local bv = Instance.new("BodyVelocity")
-            bv.Velocity  = dir * 800
-            bv.MaxForce  = Vector3.new(math.huge, math.huge, math.huge)
-            bv.P         = math.huge
-            bv.Parent    = tHrp
-            game:GetService("Debris"):AddItem(bv, 0.05)
+        local myBav=Instance.new("BodyAngularVelocity")
+        myBav.AngularVelocity=Vector3.new(0,9999,0)
+        myBav.MaxTorque=Vector3.new(0,math.huge,0)
+        myBav.P=math.huge; myBav.Parent=mHrp
+        local elapsed=0
+        local dirs={Vector3.new(1,2.5,1),Vector3.new(-1,2.5,-1),Vector3.new(1,2.5,-1),Vector3.new(-1,2.5,1)}
+        local i=0
+        local conn=RunService.Heartbeat:Connect(function(dt)
+            elapsed=elapsed+dt; if not tHrp or not tHrp.Parent then return end
+            i=(i%#dirs)+1
+            local bv=Instance.new("BodyVelocity"); bv.Velocity=dirs[i]*800
+            bv.MaxForce=Vector3.new(math.huge,math.huge,math.huge); bv.P=math.huge; bv.Parent=tHrp
+            Debris:AddItem(bv,0.05)
         end)
-
-        task.wait(0.2)
-        conn:Disconnect()
-        myBav:Destroy()
-
-        -- Final upward blast
+        task.wait(0.2); conn:Disconnect(); myBav:Destroy()
         if tHrp and tHrp.Parent then
-            local finalBv = Instance.new("BodyVelocity")
-            finalBv.Velocity  = Vector3.new(
-                math.random(-300, 300),
-                900,
-                math.random(-300, 300)
-            )
-            finalBv.MaxForce  = Vector3.new(math.huge, math.huge, math.huge)
-            finalBv.P         = math.huge
-            finalBv.Parent    = tHrp
-            game:GetService("Debris"):AddItem(finalBv, 0.15)
+            local bv=Instance.new("BodyVelocity")
+            bv.Velocity=Vector3.new(math.random(-300,300),900,math.random(-300,300))
+            bv.MaxForce=Vector3.new(math.huge,math.huge,math.huge); bv.P=math.huge; bv.Parent=tHrp
+            Debris:AddItem(bv,0.15)
         end
-
-        -- Restore our collision
         task.wait(0.3)
-        for _, part in ipairs(player.Character:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = true end
+        for _,part in ipairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide=true end
         end
     end)
 end
@@ -1466,48 +1212,53 @@ local function teleportTo(target)
 end
 
 local plRows={}
+local orbitBtnMap={}  -- [player] = orbitBtn
 
 local function buildPlayerRow(target)
     if plRows[target] then return end
-    local row=make("Frame",{
-        Size=UDim2.new(1,0,0,44),
-        BackgroundColor3=C.bg2,BorderSizePixel=0,
-    },plPage)
+    local row=make("Frame",{Size=UDim2.new(1,0,0,44),BackgroundColor3=C.bg2,BorderSizePixel=0},plPage)
     corner(row,7); stroke(row,C.border,1)
-
-    make("TextLabel",{
-        Text=target.Name,
-        Size=UDim2.new(1,-216,1,0),Position=UDim2.new(0,10,0,0),
-        BackgroundTransparency=1,TextColor3=C.text,
-        TextSize=12,Font=Enum.Font.GothamBold,
-        TextXAlignment=Enum.TextXAlignment.Left,
-        TextTruncate=Enum.TextTruncate.AtEnd,
-    },row)
-
+    make("TextLabel",{Text=target.Name,Size=UDim2.new(1,-270,1,0),Position=UDim2.new(0,10,0,0),
+        BackgroundTransparency=1,TextColor3=C.text,TextSize=12,Font=Enum.Font.GothamBold,
+        TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd},row)
     local function aBtn(label,col,xOff)
-        local b=make("TextButton",{
-            Text=label,
-            Size=UDim2.new(0,60,0,26),Position=UDim2.new(1,xOff,0.5,-13),
-            BackgroundColor3=col,TextColor3=C.textBright,
-            TextSize=10,Font=Enum.Font.GothamBold,BorderSizePixel=0,
-        },row)
+        local b=make("TextButton",{Text=label,Size=UDim2.new(0,56,0,26),Position=UDim2.new(1,xOff,0.5,-13),
+            BackgroundColor3=col,TextColor3=C.textBright,TextSize=10,Font=Enum.Font.GothamBold,BorderSizePixel=0},row)
         corner(b,5); return b
     end
+    local orbitBtn=aBtn("Orbit",  Color3.fromRGB(80,50,160), -264)
+    local specBtn =aBtn("Spectate",Color3.fromRGB(42,98,180),-204)
+    local tpBtn   =aBtn("Teleport",Color3.fromRGB(32,128,65),-144)
+    local flBtn   =aBtn("Fling",   C.red,                    -84)
 
-    local specBtn=aBtn("Spectate",Color3.fromRGB(42,98,180),-202)
-    local tpBtn  =aBtn("Teleport",Color3.fromRGB(32,128,65),-138)
-    local flBtn  =aBtn("Fling",   C.red,                    -74)
-
+    orbitBtn.Name="OrbitBtn"
     specBtn.Name="SpecBtn"
+
+    orbitBtn.MouseButton1Click:Connect(function()
+        if orbitActive and orbitTarget==target then
+            stopOrbit()
+            orbitBtn.Text="Orbit"; orbitBtn.BackgroundColor3=Color3.fromRGB(80,50,160)
+            toggleStates["Orbit  (selected player)"]=false
+        else
+            -- Set the orbit target and start
+            orbitTarget=target
+            startOrbit(target)
+            orbitBtn.Text="Stop"; orbitBtn.BackgroundColor3=C.red
+            toggleStates["Orbit  (selected player)"]=true
+            -- Reset other orbit buttons
+            for p2,r2 in pairs(plRows) do
+                if p2~=target then
+                    local ob=r2:FindFirstChild("OrbitBtn")
+                    if ob then ob.Text="Orbit"; ob.BackgroundColor3=Color3.fromRGB(80,50,160) end
+                end
+            end
+        end
+    end)
     specBtn.MouseButton1Click:Connect(function()
         if spectating==target then
-            stopSpectate()
-            specBtn.Text="Spectate"
-            specBtn.BackgroundColor3=Color3.fromRGB(42,98,180)
+            stopSpectate(); specBtn.Text="Spectate"; specBtn.BackgroundColor3=Color3.fromRGB(42,98,180)
         else
-            startSpectate(target)
-            specBtn.Text="Stop"
-            specBtn.BackgroundColor3=Color3.fromRGB(105,50,14)
+            startSpectate(target); specBtn.Text="Stop"; specBtn.BackgroundColor3=Color3.fromRGB(105,50,14)
             for p2,r2 in pairs(plRows) do
                 if p2~=target then
                     local sb=r2:FindFirstChild("SpecBtn")
@@ -1529,8 +1280,66 @@ for _,p in pairs(Players:GetPlayers()) do if p~=player then buildPlayerRow(p) en
 Players.PlayerAdded:Connect(function(p) task.wait(0.5); buildPlayerRow(p) end)
 Players.PlayerRemoving:Connect(function(p)
     if spectating==p then stopSpectate() end
+    if orbitTarget==p then stopOrbit() end
     removePlayerRow(p)
 end)
+
+-- ================================================================
+--  ACTIVE HACKS OVERLAY
+-- ================================================================
+local hacksGui=make("ScreenGui",{Name="SenetchaHacks",ResetOnSpawn=false,DisplayOrder=10,IgnoreGuiInset=true},player.PlayerGui)
+local hacksWin=make("Frame",{Size=UDim2.new(0,190,0,22),Position=UDim2.new(1,-210,0,80),
+    BackgroundColor3=Color3.fromRGB(8,7,16),BorderSizePixel=0,ClipsDescendants=true},hacksGui)
+corner(hacksWin,7); stroke(hacksWin,C.accentDim,1.5)
+local hacksTitle=make("Frame",{Size=UDim2.new(1,0,0,22),BackgroundColor3=C.titleBar,BorderSizePixel=0},hacksWin)
+corner(hacksTitle,7)
+make("Frame",{Size=UDim2.new(1,0,0.5,0),Position=UDim2.new(0,0,0.5,0),BackgroundColor3=C.titleBar,BorderSizePixel=0},hacksTitle)
+make("TextLabel",{Text="Active Hacks",Size=UDim2.new(1,-8,1,0),Position=UDim2.new(0,8,0,0),
+    BackgroundTransparency=1,TextColor3=C.textBright,TextSize=11,Font=Enum.Font.GothamBold,
+    TextXAlignment=Enum.TextXAlignment.Left},hacksTitle)
+local hacksScroll=make("ScrollingFrame",{Size=UDim2.new(1,0,1,-22),Position=UDim2.new(0,0,0,22),
+    BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=2,ScrollBarImageColor3=C.accent,
+    CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y},hacksWin)
+listLayout(hacksScroll,0)
+do
+    local hDrag=false; local hStart=Vector2.zero; local hOrigin=UDim2.new()
+    hacksTitle.InputBegan:Connect(function(inp)
+        if inp.UserInputType==Enum.UserInputType.MouseButton1 then
+            hDrag=true; hStart=UserInputService:GetMouseLocation(); hOrigin=hacksWin.Position
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(inp)
+        if inp.UserInputType==Enum.UserInputType.MouseButton1 then hDrag=false end
+    end)
+    RunService.RenderStepped:Connect(function()
+        if not hDrag then return end
+        local mp=UserInputService:GetMouseLocation(); local d=mp-hStart
+        hacksWin.Position=UDim2.new(hOrigin.X.Scale,hOrigin.X.Offset+d.X,hOrigin.Y.Scale,hOrigin.Y.Offset+d.Y)
+    end)
+end
+local hackRows={}
+local function buildHackRows()
+    local names={}; for name in pairs(toggleStates) do names[#names+1]=name end; table.sort(names)
+    for _,name in ipairs(names) do
+        local row=make("Frame",{Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,BorderSizePixel=0},hacksScroll)
+        local dot=make("Frame",{Size=UDim2.new(0,7,0,7),Position=UDim2.new(0,8,0.5,-3),
+            BackgroundColor3=C.off,BorderSizePixel=0},row)
+        corner(dot,7)
+        local lbl=make("TextLabel",{Text=name,Size=UDim2.new(1,-24,1,0),Position=UDim2.new(0,22,0,0),
+            BackgroundTransparency=1,TextColor3=C.textDim,TextSize=10,Font=Enum.Font.Gotham,
+            TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd},row)
+        hackRows[name]={dot=dot,lbl=lbl}
+    end
+    hacksWin.Size=UDim2.new(0,190,0,math.min(22+#names*20,300))
+end
+RunService.Heartbeat:Connect(function()
+    for name,r in pairs(hackRows) do
+        local on=toggleStates[name]==true
+        r.dot.BackgroundColor3=on and C.on or C.off
+        r.lbl.TextColor3=on and C.textBright or C.textDim
+    end
+end)
+task.defer(buildHackRows)
 
 -- ================================================================
 --  RUNTIME LOOPS
@@ -1554,15 +1363,13 @@ end)
 
 UserInputService.JumpRequest:Connect(function()
     if infiniteJump then
-        local c=player.Character
-        local hum=c and c:FindFirstChildOfClass("Humanoid")
+        local c=player.Character; local hum=c and c:FindFirstChildOfClass("Humanoid")
         if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
     end
 end)
 
 UserInputService.InputBegan:Connect(function(inp,gpe)
-    if listeningForKey then return end
-    if gpe then return end
+    if listeningForKey then return end; if gpe then return end
     local kc=inp.KeyCode
     if kc==menuKeybind   then mainFrame.Visible=not mainFrame.Visible end
     if kc==flyKeybind    then flyActive=not flyActive end
