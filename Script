@@ -246,19 +246,37 @@ end)
 
 -- Dragging (title bar only)
 do
-    local drag,ds,dp = false,nil,nil
+    local drag,ds,dp = false,Vector2.zero,nil
+    -- Use a full-screen invisible frame to capture drag even when mouse leaves title bar
+    local dragCapture = Instance.new("Frame")
+    dragCapture.Size = UDim2.new(1,0,1,0)
+    dragCapture.BackgroundTransparency = 1
+    dragCapture.ZIndex = 100
+    dragCapture.Visible = false
+    dragCapture.Parent = screenGui
+
     titleBar.InputBegan:Connect(function(inp)
-        if inp.UserInputType==Enum.UserInputType.MouseButton1 then
-            drag=true; ds=inp.Position; dp=mainFrame.Position
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            drag = true
+            ds   = Vector2.new(inp.Position.X, inp.Position.Y)
+            dp   = mainFrame.Position
+            dragCapture.Visible = true
         end
     end)
-    titleBar.InputEnded:Connect(function(inp)
-        if inp.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end
+    UserInputService.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            drag = false
+            dragCapture.Visible = false
+        end
     end)
     UserInputService.InputChanged:Connect(function(inp)
-        if drag and inp.UserInputType==Enum.UserInputType.MouseMove then
-            local d=inp.Position-ds
-            mainFrame.Position=UDim2.new(dp.X.Scale,dp.X.Offset+d.X,dp.Y.Scale,dp.Y.Offset+d.Y)
+        if drag and inp.UserInputType == Enum.UserInputType.MouseMove then
+            local pos = UserInputService:GetMouseLocation()
+            local d   = pos - ds
+            mainFrame.Position = UDim2.new(
+                dp.X.Scale, dp.X.Offset + d.X,
+                dp.Y.Scale, dp.Y.Offset + d.Y
+            )
         end
     end)
 end
@@ -667,74 +685,78 @@ local function makeKbRow(name, defLabel, onPicked, parent)
 end
 
 -- ============================================================
---  ESP
+--  ESP  (Drawing API — proper 3D boxes, hp bar, name, aimdir)
 -- ============================================================
-local function getESPColor(p)
-    local t=(aimbotActive and aimbotTarget==p) or (silentAimActive and silentAimTarget==p)
-    if t then return Color3.fromRGB(220,40,40),Color3.fromRGB(255,0,0) end
-    return Color3.fromRGB(255,255,255),Color3.fromRGB(190,190,190)
+
+-- Per-player ESP toggles (global flags)
+local espBoxOn    = true
+local espHealthOn = true
+local espNameOn   = true
+local espAimOn    = false   -- aimview: show crosshair direction of enemy
+
+local function getBoxColor(p)
+    local isTarget = (aimbotActive and aimbotTarget==p) or (silentAimActive and silentAimTarget==p)
+    return isTarget
+        and Color3.fromRGB(220,40,40)   -- red when locked
+        or  Color3.fromRGB(255,255,255) -- white normally
+end
+
+-- Build one set of Drawing objects per player
+local function newDrawing(class, props)
+    local d = Drawing.new(class)
+    for k,v in pairs(props) do d[k]=v end
+    return d
 end
 
 local function createESP(p)
     if not p.Character or ESP_OBJECTS[p] then return end
-    local hrp=p.Character:FindFirstChild("HumanoidRootPart"); if not hrp then return end
+    local hrp = p.Character:FindFirstChild("HumanoidRootPart"); if not hrp then return end
 
-    local hl=make("Highlight",{
-        Name="SenetchaESP",FillTransparency=0.65,OutlineTransparency=0,
-    },p.Character)
+    -- Box: 4 lines (top, bottom, left, right)
+    local function makeLine()
+        return newDrawing("Line",{Visible=false,Color=Color3.new(1,1,1),Thickness=1.5,Transparency=1,ZIndex=5})
+    end
+    local boxLines = {makeLine(),makeLine(),makeLine(),makeLine()}
 
-    -- Billboard: name + health bar (line only, no text)
-    local bb=make("BillboardGui",{
-        Name="SenetchaESPBB",
-        Size=UDim2.new(0,120,0,28),
-        StudsOffset=Vector3.new(0,3.2,0),
-        AlwaysOnTop=true,
-    },hrp)
+    -- Health bar: 2 lines (background, fill)
+    local hpBg   = newDrawing("Line",{Visible=false,Color=Color3.fromRGB(30,25,45),Thickness=4,Transparency=1,ZIndex=4})
+    local hpFill = newDrawing("Line",{Visible=false,Color=Color3.fromRGB(60,220,90),Thickness=3,Transparency=1,ZIndex=5})
 
-    local nameLbl=make("TextLabel",{
-        Size=UDim2.new(1,0,0,16),
-        BackgroundTransparency=1,
-        Text=p.Name,
-        TextColor3=Color3.fromRGB(255,255,255),
-        TextSize=13, Font=Enum.Font.GothamBold,
-        TextStrokeTransparency=0.3,
-        TextStrokeColor3=Color3.fromRGB(0,0,0),
-    },bb)
+    -- Name label
+    local nameTag = newDrawing("Text",{
+        Visible=false, Text=p.Name,
+        Color=Color3.new(1,1,1), Size=13,
+        Font=Drawing.Fonts.UI,
+        Outline=true, OutlineColor=Color3.new(0,0,0),
+        Center=true, ZIndex=6,
+    })
 
-    -- Health bar: a track and a green fill, no text
-    local hpTrack=make("Frame",{
-        Size=UDim2.new(1,0,0,4),
-        Position=UDim2.new(0,0,0,18),
-        BackgroundColor3=Color3.fromRGB(40,35,55),
-        BorderSizePixel=0,
-    },bb)
-    corner(hpTrack,9)
+    -- Aimview: a line showing where the enemy camera is pointing
+    local aimLine = newDrawing("Line",{Visible=false,Color=Color3.fromRGB(255,80,80),Thickness=1,Transparency=1,ZIndex=6})
 
-    local hpFill=make("Frame",{
-        Size=UDim2.new(1,0,1,0),
-        BackgroundColor3=Color3.fromRGB(60,220,90),
-        BorderSizePixel=0,
-    },hpTrack)
-    corner(hpFill,9)
-
-    ESP_OBJECTS[p]={highlight=hl,billboard=bb,nameLabel=nameLbl,hpFill=hpFill}
-    local fc,oc=getESPColor(p); hl.FillColor=fc; hl.OutlineColor=oc; nameLbl.TextColor3=fc
+    ESP_OBJECTS[p] = {
+        hrp=hrp, char=p.Character,
+        boxLines=boxLines, hpBg=hpBg, hpFill=hpFill,
+        nameTag=nameTag, aimLine=aimLine,
+    }
 end
 
 local function removeESP(p)
     if not ESP_OBJECTS[p] then return end
-    pcall(function() ESP_OBJECTS[p].highlight:Destroy() end)
-    pcall(function() ESP_OBJECTS[p].billboard:Destroy() end)
-    ESP_OBJECTS[p]=nil
+    local o = ESP_OBJECTS[p]
+    for _,l in ipairs(o.boxLines) do pcall(function() l:Remove() end) end
+    pcall(function() o.hpBg:Remove() end)
+    pcall(function() o.hpFill:Remove() end)
+    pcall(function() o.nameTag:Remove() end)
+    pcall(function() o.aimLine:Remove() end)
+    ESP_OBJECTS[p] = nil
 end
 
 local function updateAllESPColors()
     for p,o in pairs(ESP_OBJECTS) do
-        if o.highlight and o.highlight.Parent then
-            local fc,oc=getESPColor(p)
-            o.highlight.FillColor=fc; o.highlight.OutlineColor=oc
-            if o.nameLabel and o.nameLabel.Parent then o.nameLabel.TextColor3=fc end
-        end
+        local col = getBoxColor(p)
+        for _,l in ipairs(o.boxLines) do l.Color=col end
+        if o.nameTag then o.nameTag.Color=col end
     end
 end
 
@@ -745,20 +767,111 @@ local function disableESP()
     for p in pairs(ESP_OBJECTS) do removeESP(p) end
 end
 
--- HP bar updater (line only — green->red as health drops)
-RunService.Heartbeat:Connect(function()
+-- Main ESP render loop
+RunService.RenderStepped:Connect(function()
     for p,o in pairs(ESP_OBJECTS) do
-        if p.Character and o.hpFill and o.hpFill.Parent then
-            local hum=p.Character:FindFirstChildOfClass("Humanoid")
-            if hum then
-                local ratio=math.clamp(hum.Health/math.max(1,hum.MaxHealth),0,1)
-                o.hpFill.Size=UDim2.new(ratio,0,1,0)
-                o.hpFill.BackgroundColor3=Color3.fromRGB(
-                    math.floor(220*(1-ratio)),
-                    math.floor(220*ratio),
-                    40
-                )
+        local char = p.Character
+        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        local hum  = char and char:FindFirstChildOfClass("Humanoid")
+
+        -- Hide everything if character not loaded / died
+        local alive = hrp ~= nil and hum ~= nil and hum.Health > 0
+        if not alive then
+            for _,l in ipairs(o.boxLines) do l.Visible=false end
+            o.hpBg.Visible=false; o.hpFill.Visible=false
+            o.nameTag.Visible=false; o.aimLine.Visible=false
+            continue
+        end
+
+        -- Project character bounding box to screen
+        -- Use Head top and HRP bottom to define vertical extent
+        local head = char:FindFirstChild("Head")
+        local rootCF = hrp.CFrame
+
+        -- Get 8 corners of the character bounding box (approx 2x2x5 stud box)
+        local W,H = 1.2, 2.8   -- half-extents in studs
+        local corners = {
+            rootCF * Vector3.new( W, H, 0),
+            rootCF * Vector3.new(-W, H, 0),
+            rootCF * Vector3.new( W,-H, 0),
+            rootCF * Vector3.new(-W,-H, 0),
+        }
+
+        local minX,maxX,minY,maxY = math.huge,-math.huge,math.huge,-math.huge
+        local allVisible = true
+        for _,c3 in ipairs(corners) do
+            local sp,vis = camera:WorldToViewportPoint(c3)
+            if not vis then allVisible=false; break end
+            if sp.X<minX then minX=sp.X end
+            if sp.X>maxX then maxX=sp.X end
+            if sp.Y<minY then minY=sp.Y end
+            if sp.Y>maxY then maxY=sp.Y end
+        end
+
+        if not allVisible then
+            for _,l in ipairs(o.boxLines) do l.Visible=false end
+            o.hpBg.Visible=false; o.hpFill.Visible=false
+            o.nameTag.Visible=false; o.aimLine.Visible=false
+            continue
+        end
+
+        local col = getBoxColor(p)
+        local tl  = Vector2.new(minX, minY)
+        local tr  = Vector2.new(maxX, minY)
+        local bl  = Vector2.new(minX, maxY)
+        local br  = Vector2.new(maxX, maxY)
+
+        -- Draw box (4 lines: top, bottom, left, right)
+        local show = espBoxOn
+        local lines = o.boxLines
+        -- top
+        lines[1].From=tl; lines[1].To=tr; lines[1].Color=col; lines[1].Visible=show
+        -- bottom
+        lines[2].From=bl; lines[2].To=br; lines[2].Color=col; lines[2].Visible=show
+        -- left
+        lines[3].From=tl; lines[3].To=bl; lines[3].Color=col; lines[3].Visible=show
+        -- right
+        lines[4].From=tr; lines[4].To=br; lines[4].Color=col; lines[4].Visible=show
+
+        -- Health bar — thin vertical line to the LEFT of the box
+        local hpShow = espHealthOn
+        local ratio  = math.clamp(hum.Health/math.max(1,hum.MaxHealth),0,1)
+        local boxH   = maxY - minY
+        local hpX    = minX - 5   -- 5px left of the box
+        local hpTop  = Vector2.new(hpX, minY)
+        local hpBot  = Vector2.new(hpX, maxY)
+        local hpMid  = Vector2.new(hpX, minY + boxH*(1-ratio))
+        local hpCol  = Color3.fromRGB(math.floor(220*(1-ratio)), math.floor(220*ratio), 40)
+
+        o.hpBg.From=hpTop;  o.hpBg.To=hpBot;  o.hpBg.Visible=hpShow; o.hpBg.Color=Color3.fromRGB(30,25,45)
+        o.hpFill.From=hpMid; o.hpFill.To=hpBot; o.hpFill.Visible=hpShow; o.hpFill.Color=hpCol
+
+        -- Name tag — just above the box
+        if espNameOn and head then
+            local sp,vis = camera:WorldToViewportPoint(head.Position + Vector3.new(0,0.8,0))
+            o.nameTag.Visible = vis
+            o.nameTag.Position = Vector2.new(sp.X, sp.Y - 16)
+            o.nameTag.Color    = col
+            o.nameTag.Text     = p.Name
+        else
+            o.nameTag.Visible = false
+        end
+
+        -- Aimview — show a line in the direction the enemy is looking
+        if espAimOn then
+            local camPos = hrp.CFrame.Position
+            local lookDir = hrp.CFrame.LookVector * 8  -- 8 studs ahead
+            local aimEnd  = camPos + lookDir
+            local s1,v1 = camera:WorldToViewportPoint(camPos)
+            local s2,v2 = camera:WorldToViewportPoint(aimEnd)
+            o.aimLine.Visible = v1 and v2
+            if v1 and v2 then
+                o.aimLine.From  = Vector2.new(s1.X,s1.Y)
+                o.aimLine.To    = Vector2.new(s2.X,s2.Y)
+                o.aimLine.Color = col
             end
+        else
+            o.aimLine.Visible = false
         end
     end
 end)
@@ -770,7 +883,7 @@ Players.PlayerAdded:Connect(function(p)
 end)
 Players.PlayerRemoving:Connect(function(p)
     removeESP(p)
-    if aimbotTarget==p   then aimbotTarget=nil;    aimbotLocked=false    end
+    if aimbotTarget==p    then aimbotTarget=nil;    aimbotLocked=false    end
     if silentAimTarget==p then silentAimTarget=nil; silentAimLocked=false end
     updateAllESPColors()
 end)
@@ -999,8 +1112,25 @@ local miscDD    = makeDropdown("MISC",     cheatsPage)
 
 -- ── COMBAT ───────────────────────────────────────────────────
 
-makeToggle("ESP  /  Player Outlines", function(on)
+-- ESP sub-toggles
+makeToggle("ESP  (Master Enable)", function(on)
     espActive=on; if on then enableESP() else disableESP() end
+end, combatDD)
+
+makeToggle("ESP  -  Box", function(on)
+    espBoxOn=on
+end, combatDD)
+
+makeToggle("ESP  -  Health Bar", function(on)
+    espHealthOn=on
+end, combatDD)
+
+makeToggle("ESP  -  Name", function(on)
+    espNameOn=on
+end, combatDD)
+
+makeToggle("ESP  -  Aim Direction", function(on)
+    espAimOn=on
 end, combatDD)
 
 makeToggle("Show FOV Circle", function(on) fovCircle.Visible=on end, combatDD)
