@@ -354,11 +354,19 @@ local kbCallback     = nil
 local listeningForKey = false
 
 local function openKeybindCapture(label, cb)
-    kbSub.Text    = "for:  " .. label
-    kbCallback    = cb
-    listeningForKey = true
+    kbSub.Text        = "for:  " .. label
+    kbCallback        = cb
+    listeningForKey   = false          -- not yet — wait for the pill click to fully finish
     kbOverlay.Visible = true
+    -- Delay by 2 frames so the MouseButton1 that opened this overlay
+    -- is already gone before we start listening
+    task.defer(function()
+        task.defer(function()
+            listeningForKey = true
+        end)
+    end)
 end
+
 local function closeKeybindCapture()
     listeningForKey   = false
     kbOverlay.Visible = false
@@ -368,12 +376,17 @@ kbCancel.MouseButton1Click:Connect(closeKeybindCapture)
 
 UserInputService.InputBegan:Connect(function(inp, gpe)
     if not listeningForKey then return end
+    -- Ignore the left click on the pill button itself
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 then return end
     if inp.KeyCode == Enum.KeyCode.Escape then closeKeybindCapture() return end
     local label, key
     if inp.UserInputType == Enum.UserInputType.Keyboard then
+        -- Skip modifier-only keys that don't make sense as binds
+        local skip = {
+            [Enum.KeyCode.Unknown]=true, [Enum.KeyCode.Insert]=true,
+        }
+        if skip[inp.KeyCode] then return end
         label = inp.KeyCode.Name; key = inp.KeyCode
-    elseif inp.UserInputType == Enum.UserInputType.MouseButton1 then
-        label = "LMB"; key = Enum.UserInputType.MouseButton1
     elseif inp.UserInputType == Enum.UserInputType.MouseButton2 then
         label = "RMB"; key = Enum.UserInputType.MouseButton2
     else return end
