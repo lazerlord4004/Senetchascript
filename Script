@@ -422,6 +422,13 @@ local flyActive=false; local noclipActive=false; local infiniteJumpActive=false
 local bodyVelocity,bodyGyro,flyConn
 local toggleStates={}; local ESP_OBJECTS={}
 local AIMBOT_FOV=300; local AIMBOT_SMOOTHING=0.13
+local fovCircle = Drawing.new("Circle")
+fovCircle.Visible   = false
+fovCircle.Radius    = AIMBOT_FOV
+fovCircle.Color     = Color3.fromRGB(180, 100, 255)
+fovCircle.Thickness = 1.5
+fovCircle.Filled    = false
+fovCircle.Transparency = 1
 local TRIGGER_DELAY=0.06; local lastTriggerShot=0
 
 -- ╔══════════════════════════════════════════╗
@@ -919,6 +926,12 @@ RunService.RenderStepped:Connect(function()
     silentAimWasHeld = held
 end)
 
+-- FOV circle follows mouse cursor every frame
+RunService.RenderStepped:Connect(function()
+    local mp = UserInputService:GetMouseLocation()
+    fovCircle.Position = Vector2.new(mp.X, mp.Y)
+end)
+
 player.CharacterAdded:Connect(function(char)
     character=char; humanoid=char:WaitForChild("Humanoid"); rootPart=char:WaitForChild("HumanoidRootPart")
 end)
@@ -1014,6 +1027,16 @@ makeToggle("God Mode (Local)","🛡️",function(on)
     if hum then hum.MaxHealth=on and math.huge or 100; hum.Health=hum.MaxHealth end
 end, combatInner)
 
+makeSlider("Aim FOV","🔵",20,600,300,function(v)
+    AIMBOT_FOV=v
+    fovCircle.Radius=v
+end, combatInner)
+
+-- Fov circle visibility toggle
+makeToggle("Show FOV Circle","⭕",function(on)
+    fovCircle.Visible=on
+end, combatInner)
+
 -- Movement
 makeSlider("Speed","💨",16,300,60,function(v) currentSpeed=v end, moveInner)
 makeSlider("Jump Power","🦘",50,500,100,function(v) currentJumpPower=v end, moveInner)
@@ -1099,13 +1122,46 @@ end
 
 local function flingPlayer(target)
     if not target.Character then return end
-    local tHrp=target.Character:FindFirstChild("HumanoidRootPart")
-    local mHrp=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    local tHrp = target.Character:FindFirstChild("HumanoidRootPart")
+    local mHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     if not tHrp or not mHrp then return end
-    local bv=Instance.new("BodyVelocity")
-    bv.Velocity=(tHrp.Position-mHrp.Position).Unit*9999+Vector3.new(0,500,0)
-    bv.MaxForce=Vector3.new(math.huge,math.huge,math.huge); bv.P=math.huge; bv.Parent=tHrp
-    task.delay(0.12,function() bv:Destroy() end)
+
+    task.spawn(function()
+        -- Step 1: teleport our character directly on top of the target
+        mHrp.CFrame = tHrp.CFrame
+
+        -- Step 2: weld ourselves to the target so we spin together
+        local weld = Instance.new("ManualWeld")
+        weld.Part0 = mHrp
+        weld.Part1 = tHrp
+        weld.C0    = CFrame.new(0, 0, 0)
+        weld.Parent = mHrp
+
+        -- Step 3: spin OUR root part insanely fast — because we're welded,
+        -- the target gets dragged and flung when the weld breaks
+        local bav = Instance.new("BodyAngularVelocity")
+        bav.AngularVelocity = Vector3.new(0, 800, 0)
+        bav.MaxTorque       = Vector3.new(math.huge, math.huge, math.huge)
+        bav.P               = math.huge
+        bav.Parent          = mHrp
+
+        -- Step 4: after a short spin, blast them upward and sideways
+        task.wait(0.18)
+        weld:Destroy()
+        bav:Destroy()
+
+        local bv = Instance.new("BodyVelocity")
+        bv.Velocity  = Vector3.new(
+            math.random(-1,1) * 500,
+            600,
+            math.random(-1,1) * 500
+        )
+        bv.MaxForce  = Vector3.new(math.huge, math.huge, math.huge)
+        bv.P         = math.huge
+        bv.Parent    = tHrp
+        task.wait(0.1)
+        bv:Destroy()
+    end)
 end
 
 local function teleportToPlayer(target)
