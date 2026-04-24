@@ -853,46 +853,52 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ================================================================
---  AIMBOT
+--  AIMBOT  — hard lock, tracks target every frame with no lag
 -- ================================================================
+local function doAimLock(target)
+    if not targetAlive(target) then return false end
+    local aimPos = getAimPosition(target)
+    if not aimPos then return false end
+    -- Hard-set camera to look directly at the aim bone every single frame.
+    -- We preserve the camera position and only change the look direction.
+    local cf = camera.CFrame
+    camera.CFrame = CFrame.new(cf.Position, aimPos)
+    return true
+end
+
 RunService.RenderStepped:Connect(function()
     if not aimbotActive then
         if aimbotTarget then aimbotTarget=nil; updateAllESPColors() end
         aimbotWasHeld=false; aimbotLocked=false; return
     end
-    local held=isKeyHeld(aimbotKeybind)
-    local jp=held and not aimbotWasHeld
+    local held = isKeyHeld(aimbotKeybind)
+    local jp   = held and not aimbotWasHeld
 
     if aimbotSticky then
+        -- TOGGLE: press once to lock, press again to unlock
         if jp then
             if aimbotLocked then
                 aimbotLocked=false; aimbotTarget=nil; updateAllESPColors()
             else
-                aimbotTarget=getNearestEnemy()
-                aimbotLocked=aimbotTarget~=nil
+                aimbotTarget = getNearestEnemy()
+                aimbotLocked = aimbotTarget ~= nil
                 updateAllESPColors()
             end
         end
         if aimbotLocked then
-            if not targetAlive(aimbotTarget) then
+            if not doAimLock(aimbotTarget) then
+                -- target died or left
                 aimbotTarget=nil; aimbotLocked=false; updateAllESPColors()
-            else
-                local hw=getHeadWorld(aimbotTarget)
-                if hw then
-                    local cf=camera.CFrame
-                    camera.CFrame=cf:Lerp(CFrame.lookAt(cf.Position,hw),AIMBOT_SMOOTH)
-                end
             end
         end
     else
+        -- HOLD: lock while key held
         if held then
-            local t=getNearestEnemy()
-            if t~=aimbotTarget then aimbotTarget=t; updateAllESPColors() end
+            local t = getNearestEnemy()
+            if t ~= aimbotTarget then aimbotTarget=t; updateAllESPColors() end
             if aimbotTarget then
-                local hw=getHeadWorld(aimbotTarget)
-                if hw then
-                    local cf=camera.CFrame
-                    camera.CFrame=cf:Lerp(CFrame.lookAt(cf.Position,hw),AIMBOT_SMOOTH)
+                if not doAimLock(aimbotTarget) then
+                    aimbotTarget=nil; updateAllESPColors()
                 end
             end
         else
@@ -904,21 +910,40 @@ end)
 
 -- ================================================================
 --  SILENT AIM
+--  We poll LMB state every RenderStepped instead of using InputBegan
+--  because InputBegan fires with gpe=true when clicking in-game,
+--  which means the condition "if gpe then return end" was silently
+--  blocking every shot. Polling bypasses that entirely.
 -- ================================================================
-UserInputService.InputBegan:Connect(function(inp,gpe)
-    if gpe or listeningForKey then return end
-    if inp.UserInputType~=Enum.UserInputType.MouseButton1 then return end
-    if not silentAimActive or not silentAimTarget then return end
-    local tool=character and character:FindFirstChildOfClass("Tool"); if not tool then return end
-    local hw=getHeadWorld(silentAimTarget); if not hw then return end
-    local saved=camera.CFrame
-    camera.CFrame=CFrame.new(saved.Position,hw)
-    local conn; conn=RunService.RenderStepped:Connect(function()
-        camera.CFrame=saved; conn:Disconnect()
-    end)
-end)
+local silentLmbWasDown = false
 
 RunService.RenderStepped:Connect(function()
+    -- ── Silent aim LMB redirect (runs every frame) ────────────────
+    if silentAimActive and silentAimTarget then
+        local lmbDown = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+        local justClicked = lmbDown and not silentLmbWasDown
+        if justClicked then
+            local tool = character and character:FindFirstChildOfClass("Tool")
+            if tool then
+                local aimPos = getAimPosition(silentAimTarget)
+                if aimPos then
+                    -- Snap camera to target for exactly this frame
+                    local savedCF = camera.CFrame
+                    camera.CFrame = CFrame.new(savedCF.Position, aimPos)
+                    -- Schedule restore for next frame so the bullet raycast
+                    -- uses our redirected angle but the player never sees it move
+                    task.defer(function()
+                        camera.CFrame = savedCF
+                    end)
+                end
+            end
+        end
+        silentLmbWasDown = lmbDown
+    else
+        silentLmbWasDown = false
+    end
+
+    -- ── Target selection loop ─────────────────────────────────────
     if not silentAimActive then
         if silentAimTarget then silentAimTarget=nil; updateAllESPColors() end
         silentWasHeld=false; silentAimLocked=false; return
