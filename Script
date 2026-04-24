@@ -378,6 +378,7 @@ local noclipKeybind    = Enum.KeyCode.N;                  local noclipKBL    = "
 local menuKeybind      = Enum.KeyCode.Insert;             local menuKBL      = "Insert"
 
 local aimbotWasHeld    = false
+local aimBone          = "Head"   -- "Head" or "Torso" — what aimbot/silent aim targets
 local silentWasHeld    = false
 local triggerWasHeld   = false
 
@@ -783,19 +784,34 @@ local function isKeyHeld(bind)
     return false
 end
 
+-- Returns the screen-space position of the player's HumanoidRootPart (full hitbox centre)
+-- for FOV locking — this means your mouse just needs to be over the body, not just the head.
 local function getNearestEnemy()
-    local mp=UserInputService:GetMouseLocation()
-    local best,bestD=nil,AIMBOT_FOV
-    for _,p in pairs(Players:GetPlayers()) do
-        if p~=player and p.Character then
-            local hum=p.Character:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health>0 then
-                local head=p.Character:FindFirstChild("Head")
-                if head then
-                    local sx,sy,vis=worldToScreen(head.Position)
+    local mp   = UserInputService:GetMouseLocation()
+    local best, bestD = nil, AIMBOT_FOV
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then
+                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    -- Check HRP (body centre) for FOV distance
+                    local sx, sy, vis = worldToScreen(hrp.Position)
                     if vis then
-                        local d=(Vector2.new(sx,sy)-mp).Magnitude
-                        if d<bestD then bestD=d; best=p end
+                        local d = (Vector2.new(sx, sy) - mp).Magnitude
+                        -- Also check head and torso so being over any part locks on
+                        local head   = p.Character:FindFirstChild("Head")
+                        local torso  = p.Character:FindFirstChild("UpperTorso")
+                                    or p.Character:FindFirstChild("Torso")
+                        if head then
+                            local hx,hy,hv = worldToScreen(head.Position)
+                            if hv then d = math.min(d,(Vector2.new(hx,hy)-mp).Magnitude) end
+                        end
+                        if torso then
+                            local tx,ty,tv = worldToScreen(torso.Position)
+                            if tv then d = math.min(d,(Vector2.new(tx,ty)-mp).Magnitude) end
+                        end
+                        if d < bestD then bestD = d; best = p end
                     end
                 end
             end
@@ -804,9 +820,24 @@ local function getNearestEnemy()
     return best
 end
 
-local function getHeadWorld(p)
+-- Returns the 3D world position of the chosen aim bone (Head or Torso)
+local function getAimPosition(p)
     if not p or not p.Character then return nil end
-    local h=p.Character:FindFirstChild("Head"); return h and h.Position or nil
+    if aimBone == "Head" then
+        local h = p.Character:FindFirstChild("Head")
+        return h and h.Position or nil
+    else
+        -- Torso: try R15 UpperTorso first, fall back to R6 Torso, then HRP
+        local t = p.Character:FindFirstChild("UpperTorso")
+               or p.Character:FindFirstChild("Torso")
+               or p.Character:FindFirstChild("HumanoidRootPart")
+        return t and t.Position or nil
+    end
+end
+
+-- Keep getHeadWorld as an alias so existing call-sites don't break
+local function getHeadWorld(p)
+    return getAimPosition(p)
 end
 local function targetAlive(p)
     if not p or not p.Character then return false end
@@ -968,6 +999,61 @@ makeToggle("ESP  -  Health Bar",   function(on) espHealthOn=on end, aimPage)
 makeToggle("ESP  -  Name",         function(on) espNameOn=on   end, aimPage)
 makeToggle("Show FOV Circle",      function(on) fovCircle.Visible=on end, aimPage)
 makeSlider("FOV Radius",20,800,300,"px",function(v) AIMBOT_FOV=v; fovCircle.Radius=v end, aimPage)
+
+-- Aim bone selector (Head / Torso)
+do
+    local boneLabel = Instance.new("TextLabel")
+    boneLabel.Text                = "Aim Bone:"
+    boneLabel.Size                = UDim2.new(0, 70, 0, 28)
+    boneLabel.BackgroundTransparency = 1
+    boneLabel.TextColor3          = C.textDim
+    boneLabel.TextSize            = 10
+    boneLabel.Font                = Enum.Font.Gotham
+    boneLabel.TextXAlignment      = Enum.TextXAlignment.Left
+    boneLabel.Parent              = aimPage
+
+    local boneRow = Instance.new("Frame")
+    boneRow.Size             = UDim2.new(1, 0, 0, 28)
+    boneRow.BackgroundTransparency = 1
+    boneRow.Parent           = aimPage
+
+    local boneLayout = Instance.new("UIListLayout")
+    boneLayout.FillDirection = Enum.FillDirection.Horizontal
+    boneLayout.Padding       = UDim.new(0, 6)
+    boneLayout.Parent        = boneRow
+
+    local function makeBoneBtn(label)
+        local b = Instance.new("TextButton")
+        b.Size             = UDim2.new(0, 88, 1, 0)
+        b.BackgroundColor3 = C.bg3
+        b.TextColor3       = C.textDim
+        b.Text             = label
+        b.TextSize         = 11
+        b.Font             = Enum.Font.GothamBold
+        b.BorderSizePixel  = 0
+        b.Parent           = boneRow
+        local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,5); c.Parent = b
+        local s = Instance.new("UIStroke"); s.Color = C.border; s.Thickness = 1; s.Parent = b
+        return b, s
+    end
+
+    local headBtn,  headS  = makeBoneBtn("Head")
+    local torsoBtn, torsoS = makeBoneBtn("Torso")
+
+    local function selectBone(bone)
+        aimBone = bone
+        headBtn.BackgroundColor3  = bone=="Head"  and C.accent or C.bg3
+        headBtn.TextColor3        = bone=="Head"  and C.textBright or C.textDim
+        headS.Color               = bone=="Head"  and C.accentBright or C.border
+        torsoBtn.BackgroundColor3 = bone=="Torso" and C.accent or C.bg3
+        torsoBtn.TextColor3       = bone=="Torso" and C.textBright or C.textDim
+        torsoS.Color              = bone=="Torso" and C.accentBright or C.border
+    end
+
+    selectBone("Head")  -- default
+    headBtn.MouseButton1Click:Connect(function()  selectBone("Head")  end)
+    torsoBtn.MouseButton1Click:Connect(function() selectBone("Torso") end)
+end
 
 sectionLabel("AIMBOT", aimPage)
 makeCombatRow("Aimbot  (Camera Lock)",aimbotKBL,
@@ -1277,23 +1363,73 @@ end
 
 local function flingPlayer(target)
     if not target.Character then return end
-    local tHrp=target.Character:FindFirstChild("HumanoidRootPart")
-    local mHrp=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    local tHrp = target.Character:FindFirstChild("HumanoidRootPart")
+    local mHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     if not tHrp or not mHrp then return end
+
     task.spawn(function()
-        mHrp.CFrame=tHrp.CFrame
-        local weld=Instance.new("ManualWeld")
-        weld.Part0=mHrp; weld.Part1=tHrp; weld.C0=CFrame.new(); weld.Parent=mHrp
-        local bav=Instance.new("BodyAngularVelocity")
-        bav.AngularVelocity=Vector3.new(0,800,0)
-        bav.MaxTorque=Vector3.new(math.huge,math.huge,math.huge)
-        bav.P=math.huge; bav.Parent=mHrp
-        task.wait(0.18); weld:Destroy(); bav:Destroy()
-        local bv=Instance.new("BodyVelocity")
-        bv.Velocity=Vector3.new(math.random(-1,1)*500,600,math.random(-1,1)*500)
-        bv.MaxForce=Vector3.new(math.huge,math.huge,math.huge)
-        bv.P=math.huge; bv.Parent=tHrp
-        task.wait(0.1); bv:Destroy()
+        -- Step 1: teleport our character directly onto the target
+        mHrp.CFrame = tHrp.CFrame * CFrame.new(0, 0, 0)
+
+        -- Step 2: disable our character collision so we phase into them
+        for _, part in ipairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
+        end
+
+        -- Step 3: apply a massive spinning BodyAngularVelocity to OUR root
+        --         and simultaneously slam a BodyVelocity into the TARGET.
+        --         Because we are overlapping them the physics engine transfers force.
+        local myBav = Instance.new("BodyAngularVelocity")
+        myBav.AngularVelocity = Vector3.new(0, 9999, 0)
+        myBav.MaxTorque       = Vector3.new(0, math.huge, 0)
+        myBav.P               = math.huge
+        myBav.Parent          = mHrp
+
+        -- Hit them with a direct velocity burst every tick for 0.2s
+        local elapsed = 0
+        local directions = {
+            Vector3.new( 1, 2.5,  1),
+            Vector3.new(-1, 2.5, -1),
+            Vector3.new( 1, 2.5, -1),
+            Vector3.new(-1, 2.5,  1),
+        }
+        local i = 0
+        local conn = RunService.Heartbeat:Connect(function(dt)
+            elapsed = elapsed + dt
+            if not tHrp or not tHrp.Parent then return end
+            i = (i % #directions) + 1
+            local dir = directions[i]
+            local bv = Instance.new("BodyVelocity")
+            bv.Velocity  = dir * 800
+            bv.MaxForce  = Vector3.new(math.huge, math.huge, math.huge)
+            bv.P         = math.huge
+            bv.Parent    = tHrp
+            game:GetService("Debris"):AddItem(bv, 0.05)
+        end)
+
+        task.wait(0.2)
+        conn:Disconnect()
+        myBav:Destroy()
+
+        -- Final upward blast
+        if tHrp and tHrp.Parent then
+            local finalBv = Instance.new("BodyVelocity")
+            finalBv.Velocity  = Vector3.new(
+                math.random(-300, 300),
+                900,
+                math.random(-300, 300)
+            )
+            finalBv.MaxForce  = Vector3.new(math.huge, math.huge, math.huge)
+            finalBv.P         = math.huge
+            finalBv.Parent    = tHrp
+            game:GetService("Debris"):AddItem(finalBv, 0.15)
+        end
+
+        -- Restore our collision
+        task.wait(0.3)
+        for _, part in ipairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = true end
+        end
     end)
 end
 
