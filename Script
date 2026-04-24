@@ -1089,45 +1089,158 @@ end, charPage)
 sectionLabel("MENU", miscPage)
 makeKbRow("Open / Close Menu",menuKBL,function(k,l) menuKeybind=k; menuKBL=l end, miscPage)
 
-sectionLabel("ACTIVE HACKS", miscPage)
--- Live readout of everything currently toggled on
-local activeFrame = make("Frame",{
-    Size=UDim2.new(1,0,0,20),   -- auto grows
-    BackgroundColor3=C.bg2,
-    BorderSizePixel=0,
-},miscPage)
-corner(activeFrame,6)
-stroke(activeFrame,C.border,1)
+-- ================================================================
+--  ACTIVE HACKS OVERLAY  (separate ScreenGui, draggable, always on screen)
+-- ================================================================
+local hacksGui = Instance.new("ScreenGui")
+hacksGui.Name          = "SenetchaHacks"
+hacksGui.ResetOnSpawn  = false
+hacksGui.DisplayOrder  = 10
+hacksGui.IgnoreGuiInset= true
+hacksGui.Parent        = player.PlayerGui
 
-local activeLabel = make("TextLabel",{
-    Size=UDim2.new(1,-16,1,0),Position=UDim2.new(0,8,0,0),
-    BackgroundTransparency=1,
-    Text="None",
-    TextColor3=C.on,
-    TextSize=10,Font=Enum.Font.Gotham,
-    TextXAlignment=Enum.TextXAlignment.Left,
-    TextWrapped=true,
-},activeFrame)
+local hacksWin = Instance.new("Frame")
+hacksWin.Size             = UDim2.new(0, 190, 0, 22)
+hacksWin.Position         = UDim2.new(1, -210, 0, 80)
+hacksWin.BackgroundColor3 = Color3.fromRGB(8, 7, 16)
+hacksWin.BorderSizePixel  = 0
+hacksWin.ClipsDescendants = true
+hacksWin.Parent           = hacksGui
+corner(hacksWin, 7)
+stroke(hacksWin, C.accentDim, 1.5)
 
--- Update the active hacks label every second
-task.spawn(function()
-    while true do
-        local active={}
-        for name,state in pairs(toggleStates) do
-            if state then active[#active+1]=name end
+local hacksTitle = Instance.new("Frame")
+hacksTitle.Size             = UDim2.new(1, 0, 0, 22)
+hacksTitle.BackgroundColor3 = C.titleBar
+hacksTitle.BorderSizePixel  = 0
+hacksTitle.Parent           = hacksWin
+corner(hacksTitle, 7)
+-- patch lower corners
+local hacksTitleFix = Instance.new("Frame")
+hacksTitleFix.Size             = UDim2.new(1, 0, 0.5, 0)
+hacksTitleFix.Position         = UDim2.new(0, 0, 0.5, 0)
+hacksTitleFix.BackgroundColor3 = C.titleBar
+hacksTitleFix.BorderSizePixel  = 0
+hacksTitleFix.Parent           = hacksTitle
+
+local hacksTitleLbl = Instance.new("TextLabel")
+hacksTitleLbl.Text                = "Active Hacks"
+hacksTitleLbl.Size                = UDim2.new(1, -8, 1, 0)
+hacksTitleLbl.Position            = UDim2.new(0, 8, 0, 0)
+hacksTitleLbl.BackgroundTransparency = 1
+hacksTitleLbl.TextColor3          = C.textBright
+hacksTitleLbl.TextSize            = 11
+hacksTitleLbl.Font                = Enum.Font.GothamBold
+hacksTitleLbl.TextXAlignment      = Enum.TextXAlignment.Left
+hacksTitleLbl.Parent              = hacksTitle
+
+local hacksScroll = Instance.new("ScrollingFrame")
+hacksScroll.Size                = UDim2.new(1, 0, 1, -22)
+hacksScroll.Position            = UDim2.new(0, 0, 0, 22)
+hacksScroll.BackgroundTransparency = 1
+hacksScroll.BorderSizePixel     = 0
+hacksScroll.ScrollBarThickness  = 2
+hacksScroll.ScrollBarImageColor3= C.accent
+hacksScroll.CanvasSize          = UDim2.new(0, 0, 0, 0)
+hacksScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+hacksScroll.Parent              = hacksWin
+listLayout(hacksScroll, 0)
+
+-- Dragging
+do
+    local hDrag   = false
+    local hStart  = Vector2.zero
+    local hOrigin = UDim2.new()
+
+    hacksTitle.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            hDrag   = true
+            hStart  = UserInputService:GetMouseLocation()
+            hOrigin = hacksWin.Position
         end
-        if #active==0 then
-            activeLabel.Text="None"
-            activeFrame.Size=UDim2.new(1,0,0,26)
-        else
-            table.sort(active)
-            activeLabel.Text=table.concat(active,"\n")
-            activeFrame.Size=UDim2.new(1,0,0,10+#active*14)
+    end)
+    UserInputService.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            hDrag = false
         end
-        activeLabel.Size=UDim2.new(1,-16,1,0)
-        task.wait(0.5)
+    end)
+    RunService.RenderStepped:Connect(function()
+        if not hDrag then return end
+        local mp = UserInputService:GetMouseLocation()
+        local d  = mp - hStart
+        hacksWin.Position = UDim2.new(
+            hOrigin.X.Scale, hOrigin.X.Offset + d.X,
+            hOrigin.Y.Scale, hOrigin.Y.Offset + d.Y
+        )
+    end)
+end
+
+-- Build rows after all toggleStates are populated
+local hackRows = {}
+
+local function buildHackRows()
+    local names = {}
+    for name in pairs(toggleStates) do
+        names[#names + 1] = name
+    end
+    table.sort(names)
+
+    for _, name in ipairs(names) do
+        local row = Instance.new("Frame")
+        row.Size             = UDim2.new(1, 0, 0, 20)
+        row.BackgroundTransparency = 1
+        row.BorderSizePixel  = 0
+        row.Parent           = hacksScroll
+
+        local dot = Instance.new("Frame")
+        dot.Size             = UDim2.new(0, 7, 0, 7)
+        dot.Position         = UDim2.new(0, 8, 0.5, -3)
+        dot.BackgroundColor3 = C.off
+        dot.BorderSizePixel  = 0
+        dot.Parent           = row
+        corner(dot, 7)
+
+        local lbl = Instance.new("TextLabel")
+        lbl.Text                  = name
+        lbl.Size                  = UDim2.new(1, -24, 1, 0)
+        lbl.Position              = UDim2.new(0, 22, 0, 0)
+        lbl.BackgroundTransparency= 1
+        lbl.TextColor3            = C.textDim
+        lbl.TextSize              = 10
+        lbl.Font                  = Enum.Font.Gotham
+        lbl.TextXAlignment        = Enum.TextXAlignment.Left
+        lbl.TextTruncate          = Enum.TextTruncate.AtEnd
+        lbl.Parent                = row
+
+        hackRows[name] = { dot = dot, lbl = lbl }
+    end
+
+    -- resize window to fit (max 300px)
+    hacksWin.Size = UDim2.new(0, 190, 0, math.min(22 + #names * 20, 300))
+end
+
+-- Update dot colours and label brightness every frame
+RunService.Heartbeat:Connect(function()
+    for name, r in pairs(hackRows) do
+        local on = toggleStates[name] == true
+        r.dot.BackgroundColor3 = on and C.on or C.off
+        r.lbl.TextColor3       = on and C.textBright or C.textDim
     end
 end)
+
+-- Run after all makeToggle() calls have registered their names
+task.defer(buildHackRows)
+
+-- Note in misc tab pointing to the overlay
+make("TextLabel", {
+    Text = "Active hacks overlay is always visible on screen (drag its title to move it)",
+    Size = UDim2.new(1, 0, 0, 36),
+    BackgroundTransparency = 1,
+    TextColor3 = C.textDim,
+    TextSize = 10, Font = Enum.Font.Gotham,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextWrapped = true,
+}, miscPage)
 
 sectionLabel("UTILITY", miscPage)
 makeToggle("Anti-AFK",function(on)
