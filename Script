@@ -961,62 +961,72 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 -- ================================================================
---  SILENT AIM
---  Hooks Mouse.Hit via the game metatable so every tool that reads
---  Mouse.Hit automatically gets a redirected CFrame pointing at the
---  target — no camera movement, no visible mouse warp.
---  This is the correct method. Prediction compensates for latency.
+--  SILENT AIM  (metatable Mouse.Hit hook — from working reference)
 -- ================================================================
-local SILENT_PREDICTION = 0.18   -- studs of velocity prediction
+local SILENT_PREDICTION = 0.18
+local silentMouse = player:GetMouse()
 
+-- Hook Mouse.Hit via raw metatable so every tool reading Mouse.Hit
+-- automatically gets the redirected position with zero camera movement
 local function installSilentHook()
-    local ok, mt = pcall(getrawmetatable, game)
-    if not ok or not mt then return end
-
-    pcall(setreadonly, mt, false)
-
-    local originalIndex = mt.__index
+    local mt = getrawmetatable(game)
+    setreadonly(mt, false)
+    local oldIndex = mt.__index
     mt.__index = newcclosure(function(self, key)
-        if silentAimActive and silentAimTarget and key == "Hit" then
-            local mouse = player:GetMouse()
-            if self == mouse then
-                local target = silentAimTarget
-                if target and target.Character then
-                    local part = aimBone == "Head"
-                        and target.Character:FindFirstChild("Head")
-                        or  target.Character:FindFirstChild("UpperTorso")
-                        or  target.Character:FindFirstChild("Torso")
-                        or  target.Character:FindFirstChild("HumanoidRootPart")
+        if silentAimActive and self == silentMouse and key == "Hit" then
+            -- Find closest target in FOV
+            local closest, closestDist = nil, math.huge
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= player and p.Character then
+                    local targetPartName = aimBone == "Head" and "Head" or "HumanoidRootPart"
+                    local part = p.Character:FindFirstChild(targetPartName)
                     if part then
-                        -- Apply velocity prediction to compensate for ping
-                        local predictedCF = part.CFrame + (part.Velocity * SILENT_PREDICTION)
-                        return predictedCF
+                        local pos, onScreen = camera:WorldToScreenPoint(part.Position)
+                        if onScreen then
+                            local dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(silentMouse.X, silentMouse.Y)).Magnitude
+                            if dist < LEGIT_FOV and dist < closestDist then
+                                closestDist = dist
+                                closest = p
+                            end
+                        end
                     end
                 end
             end
+            -- If there's a target (or we have a sticky locked one), redirect
+            local target = (silentAimSticky and silentAimLocked and silentAimTarget) or closest
+            if target and target.Character then
+                local targetPartName = aimBone == "Head" and "Head" or "HumanoidRootPart"
+                local part = target.Character:FindFirstChild(targetPartName)
+                        or  target.Character:FindFirstChild("UpperTorso")
+                        or  target.Character:FindFirstChild("Torso")
+                        or  target.Character:FindFirstChild("HumanoidRootPart")
+                if part then
+                    return part.CFrame + (part.Velocity * SILENT_PREDICTION)
+                end
+            end
         end
-        return originalIndex(self, key)
+        return oldIndex(self, key)
     end)
-
-    pcall(setreadonly, mt, true)
+    setreadonly(mt, true)
 end
 pcall(installSilentHook)
 
--- Target selection loop (separate from the hook, just picks who to aim at)
+-- Target tracking loop (for ESP colour + sticky mode bookkeeping)
 RunService.RenderStepped:Connect(function()
     if not silentAimActive then
         if silentAimTarget then silentAimTarget=nil; updateAllESPColors() end
         silentWasHeld=false; silentAimLocked=false; return
     end
-    local held=isKeyHeld(silentKeybind)
-    local jp=held and not silentWasHeld
+    local held = isKeyHeld(silentKeybind)
+    local jp   = held and not silentWasHeld
     if silentAimSticky then
         if jp then
             if silentAimLocked then
                 silentAimLocked=false; silentAimTarget=nil; updateAllESPColors()
             else
-                silentAimTarget=getNearestInFov(LEGIT_FOV)
-                silentAimLocked=silentAimTarget~=nil; updateAllESPColors()
+                silentAimTarget = getNearestInFov(LEGIT_FOV)
+                silentAimLocked = silentAimTarget ~= nil
+                updateAllESPColors()
             end
         end
         if silentAimLocked and not targetAlive(silentAimTarget) then
@@ -1024,13 +1034,13 @@ RunService.RenderStepped:Connect(function()
         end
     else
         if held then
-            local t=getNearestInFov(LEGIT_FOV)
-            if t~=silentAimTarget then silentAimTarget=t; updateAllESPColors() end
+            local t = getNearestInFov(LEGIT_FOV)
+            if t ~= silentAimTarget then silentAimTarget=t; updateAllESPColors() end
         else
             if silentAimTarget then silentAimTarget=nil; updateAllESPColors() end
         end
     end
-    silentWasHeld=held
+    silentWasHeld = held
 end)
 
 player.CharacterAdded:Connect(function(char)
