@@ -14,10 +14,6 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid  = character:WaitForChild("Humanoid")
 local rootPart  = character:WaitForChild("HumanoidRootPart")
 
--- Side mouse button held-state (declared early so InputBegan listeners can use them)
-local xButton1Held = false
-local xButton2Held = false
-
 player.CharacterAdded:Connect(function(char)
     character = char
     humanoid  = char:WaitForChild("Humanoid")
@@ -261,70 +257,41 @@ corner(kbCancel,6)
 
 local kbCallback      = nil
 local listeningForKey = false
-local kbSkipFrames    = 0   -- how many more Heartbeat ticks to ignore before listening
-
--- Heartbeat counts down the skip, then arms the listener
-RunService.Heartbeat:Connect(function()
-    if kbSkipFrames > 0 then
-        kbSkipFrames = kbSkipFrames - 1
-        if kbSkipFrames == 0 then
-            listeningForKey = true
-        end
-    end
-end)
 
 local function openKeybindCapture(label, cb)
     kbSub.Text      = "for:  " .. label
     kbCallback      = cb
-    listeningForKey = false   -- disarmed until skip completes
     kbGui.Enabled   = true
-    kbSkipFrames    = 4       -- skip 4 heartbeat ticks (~67ms) so the opening click is gone
+    listeningForKey = false
+    task.wait()
+    listeningForKey = true
 end
 
 local function closeKeybindCapture()
     listeningForKey = false
-    kbSkipFrames    = 0
     kbGui.Enabled   = false
     kbCallback      = nil
 end
 
 kbCancel.MouseButton1Click:Connect(closeKeybindCapture)
 
--- ONE InputBegan for both xButton tracking AND keybind capture
 UserInputService.InputBegan:Connect(function(inp, gpe)
-    -- Always track side buttons regardless of capture state
-    if inp.UserInputType == Enum.UserInputType.MouseX1Button then xButton1Held = true end
-    if inp.UserInputType == Enum.UserInputType.MouseX2Button then xButton2Held = true end
-
     if not listeningForKey then return end
-
-    if inp.UserInputType == Enum.UserInputType.MouseButton1 then return end  -- never bind LMB
-
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 then return end
+    if inp.KeyCode == Enum.KeyCode.Escape then closeKeybindCapture(); return end
     local bl, bk
-    if inp.UserInputType == Enum.UserInputType.MouseX1Button then
-        bl="Side1"; bk=Enum.UserInputType.MouseX1Button
-    elseif inp.UserInputType == Enum.UserInputType.MouseX2Button then
-        bl="Side2"; bk=Enum.UserInputType.MouseX2Button
+    if inp.UserInputType == Enum.UserInputType.Keyboard then
+        if inp.KeyCode == Enum.KeyCode.Unknown then return end
+        bl = inp.KeyCode.Name
+        bk = inp.KeyCode
     elseif inp.UserInputType == Enum.UserInputType.MouseButton2 then
-        bl="RMB";   bk=Enum.UserInputType.MouseButton2
-    elseif inp.UserInputType == Enum.UserInputType.MouseButton3 then
-        bl="M3";    bk=Enum.UserInputType.MouseButton3
-    elseif inp.UserInputType == Enum.UserInputType.Keyboard then
-        if inp.KeyCode == Enum.KeyCode.Escape then closeKeybindCapture(); return end
-        if inp.KeyCode == Enum.KeyCode.Unknown  then return end
-        bl=inp.KeyCode.Name; bk=inp.KeyCode
+        bl = "RMB"; bk = Enum.UserInputType.MouseButton2
     else
         return
     end
-
     local saved = kbCallback
     closeKeybindCapture()
     if saved then saved(bk, bl) end
-end)
-
-UserInputService.InputEnded:Connect(function(inp)
-    if inp.UserInputType == Enum.UserInputType.MouseX1Button then xButton1Held = false end
-    if inp.UserInputType == Enum.UserInputType.MouseX2Button then xButton2Held = false end
 end)
 
 -- ================================================================
@@ -804,18 +771,10 @@ end
 
 local function isKeyHeld(bind)
     if typeof(bind)~="EnumItem" then return false end
-
-    -- Side mouse buttons tracked manually
-    if bind == Enum.UserInputType.MouseX1Button then return xButton1Held end
-    if bind == Enum.UserInputType.MouseX2Button then return xButton2Held end
-
-    if bind.EnumType == Enum.KeyCode then
+    if bind.EnumType==Enum.KeyCode then
         return UserInputService:IsKeyDown(bind)
-    elseif bind.EnumType == Enum.UserInputType then
-        local ok, result = pcall(function()
-            return UserInputService:IsMouseButtonPressed(bind)
-        end)
-        return ok and result
+    elseif bind.EnumType==Enum.UserInputType then
+        return UserInputService:IsMouseButtonPressed(bind)
     end
     return false
 end
