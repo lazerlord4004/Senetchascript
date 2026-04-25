@@ -181,10 +181,18 @@ make("Frame", {
     BackgroundColor3 = C.titleBar, BorderSizePixel = 0,
 }, titleBar)
 
+-- Logo icon in title bar
+make("ImageLabel",{
+    Image="rbxassetid://118024426453341",
+    Size=UDim2.new(0,28,0,28),
+    Position=UDim2.new(0,8,0.5,-14),
+    BackgroundTransparency=1,
+    ScaleType=Enum.ScaleType.Fit,
+},titleBar)
 make("TextLabel", {
-    Text = "SENETCHA", Size = UDim2.new(0,130,0,24), Position = UDim2.new(0,10,0,9),
+    Text = "SENETCHA", Size = UDim2.new(0,130,0,24), Position = UDim2.new(0,42,0,9),
     BackgroundTransparency = 1, TextColor3 = C.textBright,
-    TextSize = 16, Font = Enum.Font.GothamBlack,
+    TextSize = 15, Font = Enum.Font.GothamBlack,
     TextXAlignment = Enum.TextXAlignment.Left,
 }, titleBar)
 
@@ -1034,6 +1042,22 @@ makeToggle("Fullbright",function(on) local L=game:GetService("Lighting"); L.Brig
 makeToggle("Remove Fog",function(on) local L=game:GetService("Lighting"); L.FogEnd=on and 1e6 or 1000;L.FogStart=on and 1e6 or 0 end,charPage)
 makeToggle("Third Person Unlock",function(on) player.CameraMaxZoomDistance=on and 200 or 12.5 end,charPage)
 
+
+
+
+sectionLbl("TOOLS", charPage)
+
+
+makeToggle("Spin  (rotate character fast)",function(on)
+    if on then task.spawn(function()
+        while toggleStates["Spin  (rotate character fast)"] do
+            local mHrp=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if mHrp then mHrp.CFrame=mHrp.CFrame*CFrame.Angles(0,math.rad(25),0) end
+            task.wait(1/60)
+        end
+    end) end
+end,charPage)
+
 -- =============================================
 -- BUILD MISC TAB
 -- =============================================
@@ -1041,6 +1065,12 @@ sectionLbl("MENU", miscPage)
 makeKbRow("Open / Close Menu",menuKBL,function(k,l) menuKeybind=k;menuKBL=l end,miscPage)
 sectionLbl("UTILITY", miscPage)
 makeToggle("Anti-AFK",function(on) if on then task.spawn(function() while toggleStates["Anti-AFK"] do task.wait(55); pcall(function() VIM:SendKeyEvent(true,"LeftShift",false,game) end) end end) end end,miscPage)
+makeToggle("Chat Spam (say nothing)",function(on)
+    -- Sends empty presses to keep chat alive without spam
+end,miscPage)
+makeToggle("Click TP  (teleport to where you click)",function(on)
+    -- handled in InputBegan below
+end,miscPage)
 
 -- =============================================
 -- BUILD PLAYERS TAB
@@ -1067,9 +1097,22 @@ local plRows={}
 local function buildPlayerRow(target)
     if plRows[target] then return end
     local row=make("Frame",{Size=UDim2.new(1,0,0,46),BackgroundColor3=C.bg2,BorderSizePixel=0},plPage); corner(row,7); make("UIStroke",{Color=C.border,Thickness=1},row)
-    local badge=make("Frame",{Size=UDim2.new(0,28,0,28),Position=UDim2.new(0,8,0.5,-14),BackgroundColor3=C.accentDim,BorderSizePixel=0},row); corner(badge,7)
-    make("TextLabel",{Text=string.sub(target.Name,1,1):upper(),Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,TextColor3=C.accentBright,TextSize=13,Font=Enum.Font.GothamBold},badge)
-    make("TextLabel",{Text=target.Name,Size=UDim2.new(1,-280,1,0),Position=UDim2.new(0,42,0,0),BackgroundTransparency=1,TextColor3=C.text,TextSize=12,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd},row)
+    -- Avatar thumbnail
+    local badge=make("Frame",{Size=UDim2.new(0,34,0,34),Position=UDim2.new(0,6,0.5,-17),BackgroundColor3=C.accentDim,BorderSizePixel=0},row); corner(badge,6)
+    local avatarImg=make("ImageLabel",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Image=""},badge)
+    corner(avatarImg,5)
+    -- Load avatar async
+    task.spawn(function()
+        local ok,thumb=pcall(function()
+            return game:GetService("Players"):GetUserThumbnailAsync(
+                target.UserId,
+                Enum.ThumbnailType.HeadShot,
+                Enum.ThumbnailSize.Size48x48
+            )
+        end)
+        if ok and thumb then avatarImg.Image=thumb end
+    end)
+    make("TextLabel",{Text=target.Name,Size=UDim2.new(1,-284,1,0),Position=UDim2.new(0,46,0,0),BackgroundTransparency=1,TextColor3=C.text,TextSize=12,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd},row)
     local function aBtn(label,col,xOff) local b=make("TextButton",{Text=label,Size=UDim2.new(0,52,0,26),Position=UDim2.new(1,xOff,0.5,-13),BackgroundColor3=col,TextColor3=C.textBright,TextSize=10,Font=Enum.Font.GothamBold,BorderSizePixel=0},row); corner(b,5); return b end
     local orbitBtn=aBtn("Orbit",Color3.fromRGB(75,45,155),-220)
     local specBtn =aBtn("Spec", Color3.fromRGB(40,95,175),-164)
@@ -1107,7 +1150,8 @@ local hacksWin=make("Frame",{Size=UDim2.new(0,210,0,24),Position=UDim2.new(1,-22
 corner(hacksWin,8); make("UIStroke",{Color=C.accentDim,Thickness=1.5},hacksWin)
 local hacksTitle=make("Frame",{Size=UDim2.new(1,0,0,24),BackgroundColor3=C.titleBar,BorderSizePixel=0},hacksWin); corner(hacksTitle,8)
 make("Frame",{Size=UDim2.new(1,0,0.5,0),Position=UDim2.new(0,0,0.5,0),BackgroundColor3=C.titleBar,BorderSizePixel=0},hacksTitle)
-make("TextLabel",{Text="Active Hacks",Size=UDim2.new(1,-8,1,0),Position=UDim2.new(0,8,0,0),BackgroundTransparency=1,TextColor3=C.textBright,TextSize=11,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Left},hacksTitle)
+make("ImageLabel",{Image="rbxassetid://118024426453341",Size=UDim2.new(0,16,0,16),Position=UDim2.new(0,4,0.5,-8),BackgroundTransparency=1,ScaleType=Enum.ScaleType.Fit},hacksTitle)
+make("TextLabel",{Text="Active Hacks",Size=UDim2.new(1,-28,1,0),Position=UDim2.new(0,24,0,0),BackgroundTransparency=1,TextColor3=C.textBright,TextSize=11,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Left},hacksTitle)
 local hacksScroll=make("ScrollingFrame",{Size=UDim2.new(1,0,1,-24),Position=UDim2.new(0,0,0,24),BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=2,ScrollBarImageColor3=C.accent,CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y},hacksWin)
 vlist(hacksScroll,0)
 do
@@ -1158,10 +1202,18 @@ end)
 -- LOADING SCREEN
 -- =============================================
 local loadGui = make("ScreenGui", {Name="SenetchaLoad",ResetOnSpawn=false,DisplayOrder=999,IgnoreGuiInset=true}, player.PlayerGui)
-local loadBg  = make("Frame",    {Size=UDim2.new(1,0,1,0),BackgroundColor3=Color3.fromRGB(6,5,13),BorderSizePixel=0}, loadGui)
+local loadBg  = make("Frame",    {Size=UDim2.new(1,0,1,0),BackgroundColor3=Color3.fromRGB(6,5,13),BackgroundTransparency=0.35,BorderSizePixel=0}, loadGui)
 
-make("TextLabel",{Text="SENETCHA",Size=UDim2.new(0,340,0,55),Position=UDim2.new(0.5,-170,0.5,-70),BackgroundTransparency=1,TextColor3=Color3.fromRGB(255,255,255),TextSize=44,Font=Enum.Font.GothamBlack},loadBg)
-make("TextLabel",{Text="LOCK HOOD EDITION",Size=UDim2.new(0,340,0,20),Position=UDim2.new(0.5,-170,0.5,-8),BackgroundTransparency=1,TextColor3=Color3.fromRGB(140,85,255),TextSize=13,Font=Enum.Font.GothamBold},loadBg)
+-- Logo image
+make("ImageLabel",{
+    Image="rbxassetid://118024426453341",
+    Size=UDim2.new(0,90,0,90),
+    Position=UDim2.new(0.5,-45,0.5,-110),
+    BackgroundTransparency=1,
+    ScaleType=Enum.ScaleType.Fit,
+},loadBg)
+make("TextLabel",{Text="SENETCHA",Size=UDim2.new(0,340,0,46),Position=UDim2.new(0.5,-170,0.5,-10),BackgroundTransparency=1,TextColor3=Color3.fromRGB(255,255,255),TextSize=38,Font=Enum.Font.GothamBlack},loadBg)
+make("TextLabel",{Text="LOCK HOOD EDITION",Size=UDim2.new(0,340,0,18),Position=UDim2.new(0.5,-170,0.5,38),BackgroundTransparency=1,TextColor3=Color3.fromRGB(140,85,255),TextSize=12,Font=Enum.Font.GothamBold},loadBg)
 local statusLbl=make("TextLabel",{Text="",Size=UDim2.new(0,280,0,18),Position=UDim2.new(0.5,-140,0.5,48),BackgroundTransparency=1,TextColor3=Color3.fromRGB(110,100,140),TextSize=11,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left},loadBg)
 
 local barBg=make("Frame",{Size=UDim2.new(0,280,0,3),Position=UDim2.new(0.5,-140,0.5,30),BackgroundColor3=Color3.fromRGB(22,18,40),BorderSizePixel=0},loadBg); corner(barBg,9)
@@ -1175,7 +1227,25 @@ task.spawn(function()
     end
     task.wait(0.2)
     loadGui:Destroy()
+    -- Slide + fade in animation
+    local targetPos = mainFrame.Position
+    mainFrame.Position = UDim2.new(targetPos.X.Scale, targetPos.X.Offset - 40, targetPos.Y.Scale, targetPos.Y.Offset)
+    mainFrame.BackgroundTransparency = 1
     mainFrame.Visible = true
+    local steps2 = 12
+    for i = 1, steps2 do
+        local t = i / steps2
+        mainFrame.Position = UDim2.new(
+            targetPos.X.Scale,
+            targetPos.X.Offset - math.floor(40 * (1 - t)),
+            targetPos.Y.Scale,
+            targetPos.Y.Offset
+        )
+        mainFrame.BackgroundTransparency = 1 - t
+        task.wait(1/60)
+    end
+    mainFrame.Position = targetPos
+    mainFrame.BackgroundTransparency = 0
 end)
 
 print("[Senetcha] Loaded")
