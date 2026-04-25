@@ -285,7 +285,13 @@ UserInputService.InputBegan:Connect(function(inp, gpe)
         bl = inp.KeyCode.Name
         bk = inp.KeyCode
     elseif inp.UserInputType == Enum.UserInputType.MouseButton2 then
-        bl = "RMB"; bk = Enum.UserInputType.MouseButton2
+        bl = "RMB";  bk = Enum.UserInputType.MouseButton2
+    elseif inp.UserInputType == Enum.UserInputType.MouseButton3 then
+        bl = "MMB";  bk = Enum.UserInputType.MouseButton3
+    elseif inp.UserInputType == Enum.UserInputType.MouseXButton1 then
+        bl = "MB4 (Side Back)";  bk = Enum.UserInputType.MouseXButton1
+    elseif inp.UserInputType == Enum.UserInputType.MouseXButton2 then
+        bl = "MB5 (Side Fwd)";   bk = Enum.UserInputType.MouseXButton2
     else
         return
     end
@@ -338,10 +344,19 @@ local silentWasHeld    = false
 local silentLmbWasDown = false
 
 -- Triggerbot
-local triggerbotActive = false
-local triggerbotSticky = false
-local triggerbotLocked = false
-local triggerWasHeld   = false
+local triggerbotActive  = false
+local triggerbotSticky  = false
+local triggerbotLocked  = false
+local triggerWasHeld    = false
+local TRIGGER_RELEASE   = 0.05   -- delay between release and re-fire
+
+-- Auto Kill
+local autoKillActive    = false
+local autoKillTarget    = nil
+local autoKillConn      = nil
+local autoReloadActive  = false
+local autoReloadConn    = nil
+local lastAmmoCount     = nil
 
 local aimBone          = "Head"
 
@@ -366,8 +381,11 @@ local bodyVelocity,bodyGyro,flyConn
 -- FOV / smoothing
 local LEGIT_FOV       = 120   -- smaller, more legit
 local LEGIT_SMOOTH    = 0.08  -- 0–1: lower = slower/smoother
-local TRIGGER_DELAY   = 0.06
-local lastTriggerShot = 0
+local TRIGGER_DELAY        = 0.06
+local TRIGGER_RELEASE_DELAY = 0.05
+local lastTriggerShot      = 0
+local lastTriggerRelease   = 0
+local triggerWasActive     = false   -- tracks if we were shooting last frame
 
 local toggleStates = {}
 local ESP_OBJECTS  = {}
@@ -774,6 +792,7 @@ local function isKeyHeld(bind)
     if bind.EnumType==Enum.KeyCode then
         return UserInputService:IsKeyDown(bind)
     elseif bind.EnumType==Enum.UserInputType then
+        -- IsMouseButtonPressed works for LMB/RMB/MMB/XButton1/XButton2
         return UserInputService:IsMouseButtonPressed(bind)
     end
     return false
@@ -1000,30 +1019,29 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 -- ================================================================
---  SILENT AIM  (metatable Mouse.Hit hook — from working reference)
+--  SILENT AIM  (Mouse.Hit metatable hook — exact pattern from example)
 -- ================================================================
 local SILENT_PREDICTION = 0.18
 local silentMouse = player:GetMouse()
 
--- Hook Mouse.Hit via raw metatable so every tool reading Mouse.Hit
--- automatically gets the redirected position with zero camera movement
+-- Hook Mouse.Hit exactly like the working example provided
 local function installSilentHook()
     local mt = getrawmetatable(game)
     setreadonly(mt, false)
     local oldIndex = mt.__index
     mt.__index = newcclosure(function(self, key)
         if silentAimActive and self == silentMouse and key == "Hit" then
-            -- Find closest target in FOV
-            local closest, closestDist = nil, math.huge
+            -- Find closest player in FOV to mouse, same logic as example
+            local closest, closestDist = nil, LEGIT_FOV
             for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= player and p.Character then
-                    local targetPartName = aimBone == "Head" and "Head" or "HumanoidRootPart"
-                    local part = p.Character:FindFirstChild(targetPartName)
+                    local partName = aimBone == "Head" and "Head" or "HumanoidRootPart"
+                    local part = p.Character:FindFirstChild(partName)
                     if part then
                         local pos, onScreen = camera:WorldToScreenPoint(part.Position)
                         if onScreen then
                             local dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(silentMouse.X, silentMouse.Y)).Magnitude
-                            if dist < LEGIT_FOV and dist < closestDist then
+                            if dist < closestDist then
                                 closestDist = dist
                                 closest = p
                             end
@@ -1031,15 +1049,16 @@ local function installSilentHook()
                     end
                 end
             end
-            -- If there's a target (or we have a sticky locked one), redirect
+            -- Override with sticky target if we have one locked
             local target = (silentAimSticky and silentAimLocked and silentAimTarget) or closest
             if target and target.Character then
-                local targetPartName = aimBone == "Head" and "Head" or "HumanoidRootPart"
-                local part = target.Character:FindFirstChild(targetPartName)
-                        or  target.Character:FindFirstChild("UpperTorso")
-                        or  target.Character:FindFirstChild("Torso")
-                        or  target.Character:FindFirstChild("HumanoidRootPart")
+                local partName = aimBone == "Head" and "Head" or "HumanoidRootPart"
+                local part = target.Character:FindFirstChild(partName)
+                          or target.Character:FindFirstChild("UpperTorso")
+                          or target.Character:FindFirstChild("Torso")
+                          or target.Character:FindFirstChild("HumanoidRootPart")
                 if part then
+                    -- Apply velocity prediction exactly like the example
                     return part.CFrame + (part.Velocity * SILENT_PREDICTION)
                 end
             end
@@ -1050,7 +1069,7 @@ local function installSilentHook()
 end
 pcall(installSilentHook)
 
--- Target tracking loop (for ESP colour + sticky mode bookkeeping)
+-- Target tracking for ESP colours and sticky bookkeeping
 RunService.RenderStepped:Connect(function()
     if not silentAimActive then
         if silentAimTarget then silentAimTarget=nil; updateAllESPColors() end
@@ -1081,11 +1100,6 @@ RunService.RenderStepped:Connect(function()
     end
     silentWasHeld = held
 end)
-
-player.CharacterAdded:Connect(function(char)
-    character=char; humanoid=char:WaitForChild("Humanoid"); rootPart=char:WaitForChild("HumanoidRootPart")
-end)
-
 -- ================================================================
 --  TRIGGERBOT  (with press delay, release delay, always mode)
 -- ================================================================
