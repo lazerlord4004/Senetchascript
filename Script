@@ -1179,41 +1179,90 @@ end
 -- ================================================================
 local autoKillRageKeybind = Enum.UserInputType.MouseButton2
 
-local function stopAutoKill()
+local function stopAutoKillFull()
+    -- Stop the TP loop
     autoKillActive=false
     if autoKillConn then autoKillConn:Disconnect(); autoKillConn=nil end
     autoKillTarget=nil
+
+    -- Turn off rage aimbot
+    rageAimActive=false; rageAimSticky=false; rageAimLocked=false
+    rageAimTarget=nil; updateAllESPColors()
+
+    -- Turn off triggerbot always mode
+    triggerbotAlways=false; triggerbotActive=false; triggerbotLocked=false
+    toggleStates["Triggerbot"]=false
+    toggleStates["Triggerbot  -  Always Fire"]=false
+
+    -- Turn off auto reload
+    autoReloadActive=false; stopAutoReload()
+    toggleStates["Auto Reload"]=false
+
+    -- Stop orbit too
+    stopOrbit()
+
+    toggleStates["Auto Kill  (selected player)"]=false
 end
+-- Keep old name as alias so nothing breaks
+local stopAutoKill = stopAutoKillFull
 
 local function startAutoKill(target)
-    stopAutoKill()
-    autoKillTarget=target
-    autoKillActive=true
+    stopAutoKillFull()
+    autoKillTarget  = target
+    autoKillActive  = true
 
-    autoKillConn=RunService.Heartbeat:Connect(function()
+    -- Start orbiting at high speed so we spin around them fast
+    orbitSpeed  = 20    -- very fast orbit
+    orbitHeight = 0     -- ground level so we stay on them
+    orbitRadius = 1.5   -- very tight radius, essentially on top of them
+    startOrbit(target)
+
+    -- Rage aimbot: hard lock onto target, toggle mode so it stays locked
+    rageAimActive  = true
+    rageAimSticky  = true
+    rageAimTarget  = target
+    rageAimLocked  = true
+    updateAllESPColors()
+
+    autoKillConn = RunService.Heartbeat:Connect(function()
         if not autoKillActive then return end
 
-        -- Re-acquire target if they respawned
-        if not autoKillTarget or not autoKillTarget.Character
-            or not autoKillTarget.Character:FindFirstChild("HumanoidRootPart") then
-            -- Wait for them to respawn then teleport
-            if autoKillTarget then
-                local newChar = autoKillTarget.Character
-                if newChar then
-                    local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
-                    if hrp then
-                        task.wait(0.1)  -- tiny wait so their spawn loads
-                    end
-                end
+        -- If target died / left, wait for respawn then re-lock
+        if not autoKillTarget then return end
+
+        local char = autoKillTarget.Character
+        if not char then
+            -- They are dead, spectate until they respawn
+            rageAimLocked = false
+            -- Wait for character to come back
+            local ok, newChar = pcall(function()
+                return autoKillTarget.CharacterAdded:Wait()
+            end)
+            if ok and newChar then
+                task.wait(0.3)  -- let spawn load
+                autoKillTarget = autoKillTarget  -- reuse
+                -- Re-orbit and re-lock
+                orbitSpeed=20; orbitHeight=0; orbitRadius=1.5
+                startOrbit(autoKillTarget)
+                rageAimTarget  = autoKillTarget
+                rageAimLocked  = true
+                rageAimActive  = true
+                updateAllESPColors()
             end
             return
         end
 
-        local tHrp = autoKillTarget.Character:FindFirstChild("HumanoidRootPart")
+        local tHrp = char:FindFirstChild("HumanoidRootPart")
         local mHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if tHrp and mHrp then
-            -- TP directly onto them
-            mHrp.CFrame = tHrp.CFrame * CFrame.new(0, 0, -1.5)
+
+        -- Keep rage aimbot locked to this target
+        rageAimTarget = autoKillTarget
+        rageAimLocked = true
+
+        -- If orbit somehow stopped, restart it
+        if not orbitActive then
+            orbitSpeed=20; orbitHeight=0; orbitRadius=1.5
+            startOrbit(autoKillTarget)
         end
     end)
 end
@@ -1315,7 +1364,7 @@ makeToggle("Orbit  (selected player)",function(on)
     else stopOrbit() end
 end, ragePage)
 
-makeScrollRow("Orbit Speed",0.5,8,1.5," r/s",function(v) orbitSpeed=v end, ragePage)
+makeScrollRow("Orbit Speed",0.5,25,1.5," r/s",function(v) orbitSpeed=v end, ragePage)
 makeScrollRow("Orbit Height",4,60,15," st",function(v) orbitHeight=v end, ragePage)
 makeScrollRow("Orbit Radius",3,40,8," st",function(v) orbitRadius=v end, ragePage)
 
@@ -1336,27 +1385,14 @@ makeToggle("Auto Kill  (selected player)",function(on)
             return
         end
         startAutoKill(autoKillTarget)
-
-        -- Auto-enable: Rage Aimbot set to TOGGLE mode, lock onto target
-        rageAimActive=true; rageAimSticky=true
-        rageAimTarget=autoKillTarget; rageAimLocked=true
-        updateAllESPColors()
-
-        -- Auto-enable: Triggerbot set to Always mode
+        -- Auto enables: rage aimbot (inside startAutoKill), triggerbot always, auto reload
         triggerbotActive=true; triggerbotAlways=true
         toggleStates["Triggerbot"]=true
         toggleStates["Triggerbot  -  Always Fire"]=true
-
-        -- Auto-enable: Auto Reload
         autoReloadActive=true; startAutoReload()
         toggleStates["Auto Reload"]=true
     else
-        stopAutoKill()
-        -- Also turn off auto reload when auto kill stops
-        autoReloadActive=false; stopAutoReload()
-        toggleStates["Auto Reload"]=false
-        triggerbotAlways=false
-        toggleStates["Triggerbot  -  Always Fire"]=false
+        stopAutoKillFull()
     end
 end, ragePage)
 
@@ -1591,24 +1627,18 @@ local function buildPlayerRow(target)
 
     killBtn.MouseButton1Click:Connect(function()
         if autoKillActive and autoKillTarget==target then
-            stopAutoKill()
+            stopAutoKillFull()
             killBtn.Text="AutoKill"; killBtn.BackgroundColor3=Color3.fromRGB(160,30,30)
-            toggleStates["Auto Kill  (selected player)"]=false
-            autoReloadActive=false; stopAutoReload()
-            triggerbotAlways=false
         else
             autoKillTarget=target
-            -- Fire the toggle
-            toggleStates["Auto Kill  (selected player)"]=true
             startAutoKill(target)
-            rageAimActive=true; rageAimSticky=true
-            rageAimTarget=target; rageAimLocked=true
-            updateAllESPColors()
+            -- Auto enables: rage aimbot, triggerbot always, auto reload
             triggerbotActive=true; triggerbotAlways=true
             toggleStates["Triggerbot"]=true
             toggleStates["Triggerbot  -  Always Fire"]=true
             autoReloadActive=true; startAutoReload()
             toggleStates["Auto Reload"]=true
+            toggleStates["Auto Kill  (selected player)"]=true
             killBtn.Text="Stop Kill"; killBtn.BackgroundColor3=C.red
             -- Reset other kill buttons
             for p2,r2 in pairs(plRows) do
