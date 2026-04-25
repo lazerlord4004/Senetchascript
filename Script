@@ -261,61 +261,58 @@ corner(kbCancel,6)
 
 local kbCallback      = nil
 local listeningForKey = false
-local kbFrameSkip     = 0   -- counts frames to skip after opening
+local kbSkipFrames    = 0   -- how many more Heartbeat ticks to ignore before listening
 
--- Open the keybind picker. Must be called via task.spawn so task.wait works.
+-- Heartbeat counts down the skip, then arms the listener
+RunService.Heartbeat:Connect(function()
+    if kbSkipFrames > 0 then
+        kbSkipFrames = kbSkipFrames - 1
+        if kbSkipFrames == 0 then
+            listeningForKey = true
+        end
+    end
+end)
+
 local function openKeybindCapture(label, cb)
     kbSub.Text      = "for:  " .. label
     kbCallback      = cb
-    listeningForKey = false
+    listeningForKey = false   -- disarmed until skip completes
     kbGui.Enabled   = true
-    -- Skip 2 Heartbeat frames so the LMB that clicked the pill is fully gone
-    -- before we start listening. task.wait() here is safe because we are
-    -- always called inside task.spawn().
-    task.wait()
-    task.wait()
-    listeningForKey = true
+    kbSkipFrames    = 4       -- skip 4 heartbeat ticks (~67ms) so the opening click is gone
 end
 
 local function closeKeybindCapture()
     listeningForKey = false
+    kbSkipFrames    = 0
     kbGui.Enabled   = false
     kbCallback      = nil
 end
 
 kbCancel.MouseButton1Click:Connect(closeKeybindCapture)
 
--- Single InputBegan listener handles ALL input types for keybind capture
+-- ONE InputBegan for both xButton tracking AND keybind capture
 UserInputService.InputBegan:Connect(function(inp, gpe)
-    -- XButton held-state tracking (always runs regardless of listening)
+    -- Always track side buttons regardless of capture state
     if inp.UserInputType == Enum.UserInputType.MouseX1Button then xButton1Held = true end
     if inp.UserInputType == Enum.UserInputType.MouseX2Button then xButton2Held = true end
 
     if not listeningForKey then return end
 
-    -- Never bind LMB (it would break all menu clicks)
-    if inp.UserInputType == Enum.UserInputType.MouseButton1 then return end
-
-    -- Escape = cancel
-    if inp.KeyCode == Enum.KeyCode.Escape then
-        closeKeybindCapture()
-        return
-    end
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 then return end  -- never bind LMB
 
     local bl, bk
-
     if inp.UserInputType == Enum.UserInputType.MouseX1Button then
-        bl = "Side1"; bk = Enum.UserInputType.MouseX1Button
+        bl="Side1"; bk=Enum.UserInputType.MouseX1Button
     elseif inp.UserInputType == Enum.UserInputType.MouseX2Button then
-        bl = "Side2"; bk = Enum.UserInputType.MouseX2Button
+        bl="Side2"; bk=Enum.UserInputType.MouseX2Button
     elseif inp.UserInputType == Enum.UserInputType.MouseButton2 then
-        bl = "RMB";   bk = Enum.UserInputType.MouseButton2
+        bl="RMB";   bk=Enum.UserInputType.MouseButton2
     elseif inp.UserInputType == Enum.UserInputType.MouseButton3 then
-        bl = "M3";    bk = Enum.UserInputType.MouseButton3
+        bl="M3";    bk=Enum.UserInputType.MouseButton3
     elseif inp.UserInputType == Enum.UserInputType.Keyboard then
-        if inp.KeyCode == Enum.KeyCode.Unknown then return end
-        bl = inp.KeyCode.Name
-        bk = inp.KeyCode
+        if inp.KeyCode == Enum.KeyCode.Escape then closeKeybindCapture(); return end
+        if inp.KeyCode == Enum.KeyCode.Unknown  then return end
+        bl=inp.KeyCode.Name; bk=inp.KeyCode
     else
         return
     end
@@ -325,7 +322,6 @@ UserInputService.InputBegan:Connect(function(inp, gpe)
     if saved then saved(bk, bl) end
 end)
 
--- XButton release tracking lives here too (InputEnded fires globally)
 UserInputService.InputEnded:Connect(function(inp)
     if inp.UserInputType == Enum.UserInputType.MouseX1Button then xButton1Held = false end
     if inp.UserInputType == Enum.UserInputType.MouseX2Button then xButton2Held = false end
