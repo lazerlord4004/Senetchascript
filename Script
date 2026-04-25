@@ -132,13 +132,7 @@ make("UIGradient",{
     }),
 },topAccent)
 
--- Keep shadow anchored to mainFrame
-RunService.RenderStepped:Connect(function()
-    shadowFrame.Position = UDim2.new(
-        mainFrame.Position.X.Scale, mainFrame.Position.X.Offset - 10,
-        mainFrame.Position.Y.Scale, mainFrame.Position.Y.Offset + 8
-    )
-end)
+-- Shadow is positioned statically; dragging moves mainFrame independently
 
 -- Title bar
 local titleBar = make("Frame",{
@@ -258,27 +252,21 @@ local plPage   = tabPages["Players"]
 
 -- Minimise / Close
 local minimised = false
-closeBtn.MouseButton1Click:Connect(function()
-    TweenService:Create(mainFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-        BackgroundTransparency=1,
-        Size=UDim2.new(0,400,0,460),
-    }):Play()
-    task.delay(0.22, function() mainFrame.Visible=false; mainFrame.BackgroundTransparency=0; mainFrame.Size=UDim2.new(0,400,0,520) end)
-end)
+closeBtn.MouseButton1Click:Connect(closeMenu)
 minBtn.MouseButton1Click:Connect(function()
-    minimised=not minimised
-    minBtn.Text=minimised and "+" or "-"
+    minimised = not minimised
+    minBtn.Text = minimised and "+" or "-"
     if minimised then
-        TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-            Size=UDim2.new(0,400,0,44),
+        contentArea.Visible = false
+        tabStrip.Visible    = false
+        TweenService:Create(mainFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
+            Size = UDim2.new(0, 400, 0, 44),
         }):Play()
-        task.delay(0.15, function()
-            contentArea.Visible=false; tabStrip.Visible=false
-        end)
     else
-        contentArea.Visible=true; tabStrip.Visible=true
-        TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Size=UDim2.new(0,400,0,520),
+        contentArea.Visible = true
+        tabStrip.Visible    = true
+        TweenService:Create(mainFrame, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 400, 0, 520),
         }):Play()
     end
 end)
@@ -2004,44 +1992,57 @@ UserInputService.JumpRequest:Connect(function()
     end
 end)
 
+
+-- ================================================================
+--  OPEN / CLOSE ANIMATION HELPERS
+-- ================================================================
+local MENU_OPEN_POS = UDim2.new(0, 80, 0, 60)
+
+local function openMenu()
+    mainFrame.Visible              = true
+    mainFrame.Size                 = UDim2.new(0, 400, 0, 520)
+    mainFrame.BackgroundTransparency = 1
+    mainFrame.Position             = UDim2.new(
+        MENU_OPEN_POS.X.Scale, MENU_OPEN_POS.X.Offset,
+        MENU_OPEN_POS.Y.Scale, MENU_OPEN_POS.Y.Offset + 20
+    )
+    TweenService:Create(mainFrame, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 0,
+        Position               = MENU_OPEN_POS,
+    }):Play()
+end
+
+local function closeMenu()
+    local curPos = mainFrame.Position
+    TweenService:Create(mainFrame, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(curPos.X.Scale, curPos.X.Offset, curPos.Y.Scale, curPos.Y.Offset + 12),
+    }):Play()
+    task.delay(0.2, function()
+        mainFrame.Visible              = false
+        mainFrame.BackgroundTransparency = 0
+        mainFrame.Position             = MENU_OPEN_POS
+    end)
+end
 UserInputService.InputBegan:Connect(function(inp,gpe)
     if listeningForKey then return end; if gpe then return end
     local kc=inp.KeyCode
-    if kc==menuKeybind   then mainFrame.Visible=not mainFrame.Visible end
+    if kc==menuKeybind then
+        if mainFrame.Visible then closeMenu() else openMenu() end
+    end
     if kc==flyKeybind    then flyActive=not flyActive end
     if kc==noclipKeybind then noclipActive=not noclipActive end
 end)
 
--- ================================================================
---  WINDOW OPEN ANIMATION
--- ================================================================
-mainFrame.Position = UDim2.new(
-    mainFrame.Position.X.Scale,
-    mainFrame.Position.X.Offset,
-    mainFrame.Position.Y.Scale,
-    mainFrame.Position.Y.Offset + 30
-)
-mainFrame.BackgroundTransparency = 1
-local function animateIn()
-    TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Position = UDim2.new(
-            mainFrame.Position.X.Scale,
-            mainFrame.Position.X.Offset,
-            mainFrame.Position.Y.Scale,
-            mainFrame.Position.Y.Offset - 30
-        ),
-        BackgroundTransparency = 0,
-    }):Play()
-end
 
 -- ================================================================
---  LOADING SCREEN
+--  LOADING SCREEN  (simple, reliable)
 -- ================================================================
 local loadGui = make("ScreenGui", {
-    Name        = "SenetchaLoad",
-    ResetOnSpawn= false,
-    DisplayOrder= 500,
-    IgnoreGuiInset=true,
+    Name         = "SenetchaLoad",
+    ResetOnSpawn = false,
+    DisplayOrder = 500,
+    IgnoreGuiInset = true,
 }, player.PlayerGui)
 
 local loadBg = make("Frame", {
@@ -2050,56 +2051,50 @@ local loadBg = make("Frame", {
     BorderSizePixel  = 0,
 }, loadGui)
 
--- Animated background lines
-for i = 1, 6 do
-    local line = make("Frame", {
+-- Subtle horizontal scan lines
+for i = 1, 8 do
+    make("Frame", {
         Size             = UDim2.new(1, 0, 0, 1),
-        Position         = UDim2.new(0, 0, i/7, 0),
-        BackgroundColor3 = Color3.fromRGB(60, 30, 120),
-        BackgroundTransparency = 0.7,
+        Position         = UDim2.new(0, 0, i / 9, 0),
+        BackgroundColor3 = Color3.fromRGB(80, 40, 160),
+        BackgroundTransparency = 0.82,
         BorderSizePixel  = 0,
     }, loadBg)
-    TweenService:Create(line, TweenInfo.new(
-        1.5 + i*0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true
-    ), {BackgroundTransparency = 0.95}):Play()
 end
 
 local loadCenter = make("Frame", {
-    Size             = UDim2.new(0, 320, 0, 200),
-    Position         = UDim2.new(0.5, -160, 0.5, -100),
+    Size             = UDim2.new(0, 340, 0, 180),
+    Position         = UDim2.new(0.5, -170, 0.5, -90),
     BackgroundTransparency = 1,
     BorderSizePixel  = 0,
 }, loadBg)
 
--- Logo text
 local logoLbl = make("TextLabel", {
     Text             = "SENETCHA",
-    Size             = UDim2.new(1, 0, 0, 60),
-    Position         = UDim2.new(0, 0, 0, 10),
+    Size             = UDim2.new(1, 0, 0, 55),
+    Position         = UDim2.new(0, 0, 0, 0),
     BackgroundTransparency = 1,
     TextColor3       = Color3.fromRGB(255, 255, 255),
-    TextSize         = 42,
+    TextSize         = 44,
     Font             = Enum.Font.GothamBlack,
     TextTransparency = 1,
 }, loadCenter)
 
 local subLbl = make("TextLabel", {
     Text             = "LOCK HOOD EDITION",
-    Size             = UDim2.new(1, 0, 0, 22),
-    Position         = UDim2.new(0, 0, 0, 70),
+    Size             = UDim2.new(1, 0, 0, 20),
+    Position         = UDim2.new(0, 0, 0, 60),
     BackgroundTransparency = 1,
     TextColor3       = Color3.fromRGB(140, 85, 255),
     TextSize         = 13,
     Font             = Enum.Font.GothamBold,
     TextTransparency = 1,
-    TextTracking     = 6,
 }, loadCenter)
 
--- Progress bar track
 local barTrack = make("Frame", {
-    Size             = UDim2.new(0, 260, 0, 3),
-    Position         = UDim2.new(0, 30, 0, 118),
-    BackgroundColor3 = Color3.fromRGB(25, 20, 48),
+    Size             = UDim2.new(0, 280, 0, 3),
+    Position         = UDim2.new(0, 30, 0, 104),
+    BackgroundColor3 = Color3.fromRGB(22, 18, 40),
     BorderSizePixel  = 0,
 }, loadCenter)
 corner(barTrack, 9)
@@ -2110,97 +2105,58 @@ local barFill = make("Frame", {
     BorderSizePixel  = 0,
 }, barTrack)
 corner(barFill, 9)
-make("UIGradient", {
-    Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(108, 52, 220)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 130, 255)),
-    }),
-}, barFill)
-
--- Shimmer on bar
-local shimmer = make("Frame", {
-    Size             = UDim2.new(0, 60, 1, 0),
-    BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-    BackgroundTransparency = 0.7,
-    BorderSizePixel  = 0,
-}, barFill)
-corner(shimmer, 9)
 
 local statusLbl = make("TextLabel", {
-    Text             = "Initialising...",
+    Text             = "",
     Size             = UDim2.new(1, 0, 0, 18),
-    Position         = UDim2.new(0, 0, 0, 132),
+    Position         = UDim2.new(0, 0, 0, 120),
     BackgroundTransparency = 1,
-    TextColor3       = Color3.fromRGB(115, 108, 145),
+    TextColor3       = Color3.fromRGB(110, 100, 140),
     TextSize         = 11,
     Font             = Enum.Font.Gotham,
     TextTransparency = 1,
 }, loadCenter)
 
-local versionLbl = make("TextLabel", {
-    Text             = "v2.0  •  Lock Hood  •  All rights reserved",
-    Size             = UDim2.new(1, 0, 0, 16),
-    Position         = UDim2.new(0, 0, 1, -24),
-    BackgroundTransparency = 1,
-    TextColor3       = Color3.fromRGB(60, 55, 80),
-    TextSize         = 10,
-    Font             = Enum.Font.Gotham,
-}, loadBg)
-
--- Loading sequence
 local STEPS = {
-    {text="Loading core modules...",   pct=0.18},
-    {text="Initialising ESP...",       pct=0.36},
-    {text="Hooking mouse metatable...",pct=0.54},
-    {text="Building interface...",     pct=0.72},
-    {text="Applying polish...",        pct=0.90},
-    {text="Ready.",                    pct=1.00},
+    { text = "Loading modules...",        pct = 0.2  },
+    { text = "Setting up ESP...",         pct = 0.4  },
+    { text = "Hooking metatable...",      pct = 0.6  },
+    { text = "Building interface...",     pct = 0.8  },
+    { text = "Ready.",                    pct = 1.0  },
 }
 
 task.spawn(function()
-    -- Fade in logo
-    TweenService:Create(logoLbl, TweenInfo.new(0.6, Enum.EasingStyle.Quad), {TextTransparency=0}):Play()
-    task.wait(0.3)
-    TweenService:Create(subLbl,  TweenInfo.new(0.5, Enum.EasingStyle.Quad), {TextTransparency=0}):Play()
-    TweenService:Create(statusLbl,TweenInfo.new(0.5,Enum.EasingStyle.Quad), {TextTransparency=0}):Play()
-    task.wait(0.5)
+    -- Fade in logo and sub
+    TweenService:Create(logoLbl,   TweenInfo.new(0.5), { TextTransparency = 0 }):Play()
+    task.wait(0.25)
+    TweenService:Create(subLbl,    TweenInfo.new(0.4), { TextTransparency = 0 }):Play()
+    TweenService:Create(statusLbl, TweenInfo.new(0.4), { TextTransparency = 0 }):Play()
+    task.wait(0.4)
 
+    -- Run through steps
     for _, step in ipairs(STEPS) do
         statusLbl.Text = step.text
-        TweenService:Create(barFill, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
-            Size = UDim2.new(step.pct, 0, 1, 0),
-        }):Play()
-        -- Shimmer animation
-        shimmer.Position = UDim2.new(0, 0, 0, 0)
-        TweenService:Create(shimmer, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
-            Position = UDim2.new(1, -60, 0, 0),
-        }):Play()
+        TweenService:Create(barFill,
+            TweenInfo.new(0.35, Enum.EasingStyle.Quad),
+            { Size = UDim2.new(step.pct, 0, 1, 0) }
+        ):Play()
         task.wait(0.38)
     end
 
-    task.wait(0.3)
+    task.wait(0.25)
 
-    -- Fade out loading screen
-    TweenService:Create(loadBg, TweenInfo.new(0.45, Enum.EasingStyle.Quad), {
-        BackgroundTransparency = 1,
-    }):Play()
-    for _, d in ipairs(loadBg:GetDescendants()) do
-        if d:IsA("Frame") or d:IsA("TextLabel") then
-            pcall(function()
-                TweenService:Create(d, TweenInfo.new(0.35, Enum.EasingStyle.Quad), {
-                    BackgroundTransparency = 1,
-                    TextTransparency       = 1,
-                }):Play()
-            end)
-        end
-    end
+    -- Fade out ONLY the background and text labels individually
+    TweenService:Create(logoLbl,   TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
+    TweenService:Create(subLbl,    TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
+    TweenService:Create(statusLbl, TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
+    TweenService:Create(barFill,   TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play()
+    TweenService:Create(barTrack,  TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play()
+    TweenService:Create(loadBg,    TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play()
+    task.wait(0.35)
 
-    task.wait(0.5)
     loadGui:Destroy()
 
-    -- Slide main menu in
-    mainFrame.Visible = true
-    animateIn()
+    -- Show and animate main menu in
+    openMenu()
 end)
-
 print("[Senetcha] Loaded")
