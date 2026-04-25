@@ -183,7 +183,7 @@ make("Frame", {
 
 -- Logo icon in title bar
 make("ImageLabel",{
-    Image="rbxassetid://118024426453341",
+    Image="rbxthumb://type=Asset&id=118024426453341&w=150&h=150",
     Size=UDim2.new(0,28,0,28),
     Position=UDim2.new(0,8,0.5,-14),
     BackgroundTransparency=1,
@@ -1099,19 +1099,14 @@ local function buildPlayerRow(target)
     local row=make("Frame",{Size=UDim2.new(1,0,0,46),BackgroundColor3=C.bg2,BorderSizePixel=0},plPage); corner(row,7); make("UIStroke",{Color=C.border,Thickness=1},row)
     -- Avatar thumbnail
     local badge=make("Frame",{Size=UDim2.new(0,34,0,34),Position=UDim2.new(0,6,0.5,-17),BackgroundColor3=C.accentDim,BorderSizePixel=0},row); corner(badge,6)
-    local avatarImg=make("ImageLabel",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Image=""},badge)
+    -- Use the thumbnail URL format directly — works without async calls
+    local thumbUrl = "https://www.roblox.com/headshot-thumbnail/image?userId="..target.UserId.."&width=48&height=48&format=png"
+    local avatarImg=make("ImageLabel",{
+        Size=UDim2.new(1,0,1,0),
+        BackgroundTransparency=1,
+        Image=thumbUrl,
+    },badge)
     corner(avatarImg,5)
-    -- Load avatar async
-    task.spawn(function()
-        local ok,thumb=pcall(function()
-            return game:GetService("Players"):GetUserThumbnailAsync(
-                target.UserId,
-                Enum.ThumbnailType.HeadShot,
-                Enum.ThumbnailSize.Size48x48
-            )
-        end)
-        if ok and thumb then avatarImg.Image=thumb end
-    end)
     make("TextLabel",{Text=target.Name,Size=UDim2.new(1,-284,1,0),Position=UDim2.new(0,46,0,0),BackgroundTransparency=1,TextColor3=C.text,TextSize=12,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd},row)
     local function aBtn(label,col,xOff) local b=make("TextButton",{Text=label,Size=UDim2.new(0,52,0,26),Position=UDim2.new(1,xOff,0.5,-13),BackgroundColor3=col,TextColor3=C.textBright,TextSize=10,Font=Enum.Font.GothamBold,BorderSizePixel=0},row); corner(b,5); return b end
     local orbitBtn=aBtn("Orbit",Color3.fromRGB(75,45,155),-220)
@@ -1150,7 +1145,7 @@ local hacksWin=make("Frame",{Size=UDim2.new(0,210,0,24),Position=UDim2.new(1,-22
 corner(hacksWin,8); make("UIStroke",{Color=C.accentDim,Thickness=1.5},hacksWin)
 local hacksTitle=make("Frame",{Size=UDim2.new(1,0,0,24),BackgroundColor3=C.titleBar,BorderSizePixel=0},hacksWin); corner(hacksTitle,8)
 make("Frame",{Size=UDim2.new(1,0,0.5,0),Position=UDim2.new(0,0,0.5,0),BackgroundColor3=C.titleBar,BorderSizePixel=0},hacksTitle)
-make("ImageLabel",{Image="rbxassetid://118024426453341",Size=UDim2.new(0,16,0,16),Position=UDim2.new(0,4,0.5,-8),BackgroundTransparency=1,ScaleType=Enum.ScaleType.Fit},hacksTitle)
+make("ImageLabel",{Image="rbxthumb://type=Asset&id=118024426453341&w=150&h=150",Size=UDim2.new(0,16,0,16),Position=UDim2.new(0,4,0.5,-8),BackgroundTransparency=1,ScaleType=Enum.ScaleType.Fit},hacksTitle)
 make("TextLabel",{Text="Active Hacks",Size=UDim2.new(1,-28,1,0),Position=UDim2.new(0,24,0,0),BackgroundTransparency=1,TextColor3=C.textBright,TextSize=11,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Left},hacksTitle)
 local hacksScroll=make("ScrollingFrame",{Size=UDim2.new(1,0,1,-24),Position=UDim2.new(0,0,0,24),BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=2,ScrollBarImageColor3=C.accent,CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y},hacksWin)
 vlist(hacksScroll,0)
@@ -1206,7 +1201,7 @@ local loadBg  = make("Frame",    {Size=UDim2.new(1,0,1,0),BackgroundColor3=Color
 
 -- Logo image
 make("ImageLabel",{
-    Image="rbxassetid://118024426453341",
+    Image="rbxthumb://type=Asset&id=118024426453341&w=150&h=150",
     Size=UDim2.new(0,90,0,90),
     Position=UDim2.new(0.5,-45,0.5,-110),
     BackgroundTransparency=1,
