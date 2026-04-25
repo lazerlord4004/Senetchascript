@@ -266,20 +266,21 @@ end
 kbCancel.MouseButton1Click:Connect(closeKeybindCapture)
 UserInputService.InputBegan:Connect(function(inp,gpe)
     if not listeningForKey then return end
-    if inp.UserInputType==Enum.UserInputType.MouseButton1 then return end
+    if inp.UserInputType==Enum.UserInputType.MouseButton1 then return end  -- LMB ignored
     if inp.KeyCode==Enum.KeyCode.Escape then closeKeybindCapture(); return end
     local bl,bk
-    if inp.UserInputType==Enum.UserInputType.Keyboard then
-        if inp.KeyCode==Enum.KeyCode.Unknown then return end
-        bl=inp.KeyCode.Name; bk=inp.KeyCode
+    if inp.UserInputType==Enum.UserInputType.MouseX1Button then
+        -- Side button 1 detected — MUST come before Keyboard check
+        bl="Side1"; bk=Enum.UserInputType.MouseX1Button
+    elseif inp.UserInputType==Enum.UserInputType.MouseX2Button then
+        bl="Side2"; bk=Enum.UserInputType.MouseX2Button
     elseif inp.UserInputType==Enum.UserInputType.MouseButton2 then
         bl="RMB"; bk=Enum.UserInputType.MouseButton2
     elseif inp.UserInputType==Enum.UserInputType.MouseButton3 then
         bl="M3";  bk=Enum.UserInputType.MouseButton3
-    elseif inp.UserInputType==Enum.UserInputType.MouseX1Button then
-        bl="Side1"; bk=Enum.UserInputType.MouseX1Button
-    elseif inp.UserInputType==Enum.UserInputType.MouseX2Button then
-        bl="Side2"; bk=Enum.UserInputType.MouseX2Button
+    elseif inp.UserInputType==Enum.UserInputType.Keyboard then
+        if inp.KeyCode==Enum.KeyCode.Unknown then return end
+        bl=inp.KeyCode.Name; bk=inp.KeyCode
     else return end
     local saved=kbCallback; closeKeybindCapture(); if saved then saved(bk,bl) end
 end)
@@ -756,12 +757,30 @@ end
 -- ================================================================
 --  TARGETING HELPERS
 -- ================================================================
+-- XButton1/XButton2 (mouse side buttons) can't be polled via IsMouseButtonPressed
+-- so we track their state manually via InputBegan/InputEnded
+local xButton1Held = false
+local xButton2Held = false
+
+UserInputService.InputBegan:Connect(function(inp, gpe)
+    if inp.UserInputType == Enum.UserInputType.MouseX1Button then xButton1Held = true  end
+    if inp.UserInputType == Enum.UserInputType.MouseX2Button then xButton2Held = true  end
+end)
+UserInputService.InputEnded:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseX1Button then xButton1Held = false end
+    if inp.UserInputType == Enum.UserInputType.MouseX2Button then xButton2Held = false end
+end)
+
 local function isKeyHeld(bind)
     if typeof(bind)~="EnumItem" then return false end
-    if bind.EnumType==Enum.KeyCode then
+
+    -- Side mouse buttons tracked manually
+    if bind == Enum.UserInputType.MouseX1Button then return xButton1Held end
+    if bind == Enum.UserInputType.MouseX2Button then return xButton2Held end
+
+    if bind.EnumType == Enum.KeyCode then
         return UserInputService:IsKeyDown(bind)
-    elseif bind.EnumType==Enum.UserInputType then
-        -- MouseButton1/2/3 and side buttons (X1, X2) all work via IsMouseButtonPressed
+    elseif bind.EnumType == Enum.UserInputType then
         local ok, result = pcall(function()
             return UserInputService:IsMouseButtonPressed(bind)
         end)
