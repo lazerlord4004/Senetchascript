@@ -95,16 +95,6 @@ local dragCapture = make("Frame",{
     Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,ZIndex=200,Visible=false,
 },screenGui)
 
--- Shadow layer (sits behind mainFrame)
-local shadowFrame = make("Frame",{
-    Size=UDim2.new(1,20,1,20),
-    Position=UDim2.new(0,-10,0,8),
-    BackgroundColor3=Color3.fromRGB(0,0,0),
-    BackgroundTransparency=0.55,
-    BorderSizePixel=0,
-    ZIndex=0,
-},screenGui)
-corner(shadowFrame,14)
 
 local mainFrame = make("Frame",{
     Name="Main",Size=UDim2.new(0,400,0,520),Position=UDim2.new(0,80,0,60),
@@ -198,7 +188,7 @@ padding(tabStrip,4,4,3,3)
 
 local contentArea = make("Frame",{
     Size=UDim2.new(1,0,1,-80),Position=UDim2.new(0,0,0,80),
-    BackgroundTransparency=1,ClipsDescendants=true,
+    BackgroundTransparency=1,ClipsDescendants=true,Visible=true,
 },mainFrame)
 
 local tabBtns  = {}
@@ -261,25 +251,14 @@ closeBtn.MouseButton1Click:Connect(function() if closeMenu then closeMenu() end 
 minBtn.MouseButton1Click:Connect(function()
     minimised = not minimised
     minBtn.Text = minimised and "+" or "-"
-    if minimised then
-        contentArea.Visible = false
-        tabStrip.Visible    = false
-        pcall(function() mainFrame.Size = UDim2.new(0 end)
-    else
-        contentArea.Visible = true
-        tabStrip.Visible    = true
-        pcall(function() mainFrame.Size = UDim2.new(0 end)
-    end
+    contentArea.Visible = not minimised
+    tabStrip.Visible    = not minimised
+    mainFrame.Size = minimised and UDim2.new(0,400,0,44) or UDim2.new(0,400,0,520)
 end)
 
 -- Assign openMenu / closeMenu now that mainFrame exists
 openMenu = function()
-    mainFrame.Visible              = true
-    mainFrame.BackgroundTransparency = 0
-    mainFrame.Position             = MENU_POS
-    mainFrame.Size                 = UDim2.new(0, 400, 0, 520)
-    contentArea.Visible            = true
-    tabStrip.Visible               = true
+    mainFrame.Visible = true
 end
 
 closeMenu = function()
@@ -519,7 +498,6 @@ local function makeToggle(name,cb,page)
     local row=make("TextButton",{Size=UDim2.new(1,0,0,32),BackgroundColor3=C.bg2,BorderSizePixel=0,Text=""},page)
     corner(row,7); local rS=stroke(row,C.border,1)
 
-    -- Left colour bar (hidden until active)
     local bar=make("Frame",{Size=UDim2.new(0,2,0.7,0),Position=UDim2.new(0,0,0.15,0),
         BackgroundColor3=C.accent,BorderSizePixel=0,BackgroundTransparency=1},row)
     corner(bar,2)
@@ -528,44 +506,31 @@ local function makeToggle(name,cb,page)
         BackgroundTransparency=1,TextColor3=C.text,TextSize=11,Font=Enum.Font.Gotham,
         TextXAlignment=Enum.TextXAlignment.Left},row)
 
-    -- Toggle track (pill shape)
     local track=make("Frame",{Size=UDim2.new(0,28,0,14),Position=UDim2.new(1,-36,0.5,-7),
         BackgroundColor3=C.off,BorderSizePixel=0},row)
     corner(track,7)
 
-    -- Toggle knob
     local knob=make("Frame",{Size=UDim2.new(0,10,0,10),Position=UDim2.new(0,2,0.5,-5),
         BackgroundColor3=Color3.fromRGB(180,175,200),BorderSizePixel=0},track)
     corner(knob,9)
 
     toggleStates[name]=false
-    local tweening=false
     local function setState(on)
         toggleStates[name]=on
-        -- Animate knob position
-        pcall(function() knob.Position = on and UDim2.new(1 end)
-pcall(function() knob.BackgroundColor3 = on and Color3.fromRGB(255 end)
-        pcall(function() track.BackgroundColor3 = on and C.accent or C.off end)
-        pcall(function() row.BackgroundColor3 = on and C.bg3 or C.bg2 end)
-        pcall(function() rS.Color = on and C.borderOn or C.border end)
-        bar.BackgroundTransparency=on and 0 or 1
+        knob.Position        = on and UDim2.new(1,-12,0.5,-5) or UDim2.new(0,2,0.5,-5)
+        knob.BackgroundColor3= on and Color3.fromRGB(255,255,255) or Color3.fromRGB(180,175,200)
+        track.BackgroundColor3= on and C.accent or C.off
+        row.BackgroundColor3  = on and C.bg3    or C.bg2
+        rS.Color              = on and C.borderOn or C.border
+        bar.BackgroundTransparency = on and 0 or 1
     end
 
-    -- Hover effect
-    row.MouseEnter:Connect(function()
-        if not toggleStates[name] then
-            pcall(function() row.BackgroundColor3 = C.bg3 end)
-        end
+    row.MouseButton1Click:Connect(function()
+        setState(not toggleStates[name]); cb(toggleStates[name])
     end)
-    row.MouseLeave:Connect(function()
-        if not toggleStates[name] then
-            pcall(function() row.BackgroundColor3 = C.bg2 end)
-        end
-    end)
-
-    row.MouseButton1Click:Connect(function() setState(not toggleStates[name]); cb(toggleStates[name]) end)
     return setState
 end
+
 
 local function makeSlider(name,minV,maxV,defV,suffix,cb,page)
     page=page or miscPage; suffix=suffix or ""
@@ -648,7 +613,6 @@ local function makeCombatRow(name,defKey,onToggle,onKb,onMode,page)
     local row=make("Frame",{Size=UDim2.new(1,0,0,34),BackgroundColor3=C.bg2,BorderSizePixel=0},page)
     corner(row,7); local rS=stroke(row,C.border,1)
 
-    -- Active left bar
     local bar=make("Frame",{Size=UDim2.new(0,2,0.65,0),Position=UDim2.new(0,0,0.175,0),
         BackgroundColor3=C.accent,BorderSizePixel=0,BackgroundTransparency=1},row)
     corner(bar,2)
@@ -668,7 +632,6 @@ local function makeCombatRow(name,defKey,onToggle,onKb,onMode,page)
         TextSize=9,Font=Enum.Font.GothamBold,BorderSizePixel=0},row)
     corner(modeBtn,5); local mS=stroke(modeBtn,C.border,1)
 
-    -- Toggle track + knob (same pill as makeToggle)
     local track=make("Frame",{Size=UDim2.new(0,28,0,14),Position=UDim2.new(1,-34,0.5,-7),
         BackgroundColor3=C.off,BorderSizePixel=0},row)
     corner(track,7)
@@ -679,27 +642,21 @@ local function makeCombatRow(name,defKey,onToggle,onKb,onMode,page)
     local ta=make("TextButton",{Size=UDim2.new(1,-174,1,0),BackgroundTransparency=1,Text=""},row)
     toggleStates[name]=false
 
-    row.MouseEnter:Connect(function()
-        if not toggleStates[name] then pcall(function() row.BackgroundColor3 = C.bg3 end) end
-    end)
-    row.MouseLeave:Connect(function()
-        if not toggleStates[name] then pcall(function() row.BackgroundColor3 = C.bg2 end) end
-    end)
-
     ta.MouseButton1Click:Connect(function()
         toggleStates[name]=not toggleStates[name]; local on=toggleStates[name]
-        pcall(function() knob.Position = on and UDim2.new(1 end)
-pcall(function() knob.BackgroundColor3 = on and Color3.fromRGB(255 end)
-        pcall(function() track.BackgroundColor3 = on and C.accent or C.off end)
-        pcall(function() row.BackgroundColor3 = on and C.bg3 or C.bg2 end)
-        pcall(function() rS.Color = on and C.borderOn or C.border end)
-        bar.BackgroundTransparency=on and 0 or 1
+        knob.Position         = on and UDim2.new(1,-12,0.5,-5) or UDim2.new(0,2,0.5,-5)
+        knob.BackgroundColor3 = on and Color3.fromRGB(255,255,255) or Color3.fromRGB(180,175,200)
+        track.BackgroundColor3= on and C.accent or C.off
+        row.BackgroundColor3  = on and C.bg3    or C.bg2
+        rS.Color              = on and C.borderOn or C.border
+        bar.BackgroundTransparency = on and 0 or 1
         onToggle(on)
     end)
 
     kbBtn.MouseButton1Click:Connect(function()
         task.spawn(openKeybindCapture,name,function(k,l) kbBtn.Text="["..l.."]"; onKb(k,l) end)
     end)
+
     modeBtn.MouseButton1Click:Connect(function()
         modeIsToggle=not modeIsToggle
         if modeIsToggle then
@@ -713,7 +670,7 @@ pcall(function() knob.BackgroundColor3 = on and Color3.fromRGB(255 end)
     end)
 end
 
--- Scroll wheel value row (for orbit speed/height)
+
 local function makeScrollRow(name,minV,maxV,defV,suffix,cb,page)
     page=page or ragePage; suffix=suffix or ""
     local row=make("Frame",{Size=UDim2.new(1,0,0,30),BackgroundColor3=C.bg2,BorderSizePixel=0},page)
