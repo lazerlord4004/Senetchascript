@@ -287,6 +287,7 @@ local espHealthOn     = true
 local espNameOn       = true
 local espBoneOn       = false
 local espTracerOn     = false
+local tracerOrigin    = "Bottom"   -- "Bottom", "Middle", "Top"
 
 -- Legit aimbot (smooth, FOV-gated, looks human)
 local legitAimActive  = false
@@ -531,7 +532,7 @@ local function newLine(thick,col,zi)
 end
 local function newText2()
     local t=Drawing.new("Text"); t.Visible=false; t.Color=Color3.new(1,1,1)
-    t.Size=13; t.Font=Drawing.Fonts.UI; t.Outline=true
+    t.Size=13; t.Font=Drawing.Fonts.Monospace; t.Outline=true
     t.OutlineColor=Color3.new(0,0,0); t.Center=true; t.ZIndex=6; return t
 end
 
@@ -685,12 +686,21 @@ RunService.RenderStepped:Connect(function()
         -- ── Tracer ───────────────────────────────────────────────
         if o.tracer then
             if espTracerOn and espActive then
-                -- Draw from bottom-centre of screen to the player's feet
-                local vp      = camera.ViewportSize
-                local screenBottom = Vector2.new(vp.X/2, vp.Y)
+                local vp = camera.ViewportSize
+                -- Origin on screen based on tracerOrigin setting
+                local originY
+                if tracerOrigin == "Top" then
+                    originY = 0
+                elseif tracerOrigin == "Middle" then
+                    originY = vp.Y / 2
+                else  -- Bottom (default)
+                    originY = vp.Y
+                end
+                local origin = Vector2.new(vp.X / 2, originY)
+                -- Target: player feet
                 local fx2,fy2,fv2 = worldToScreen(hrp.Position - Vector3.new(0,2.8,0))
                 if fv2 then
-                    o.tracer.From    = screenBottom
+                    o.tracer.From    = origin
                     o.tracer.To      = Vector2.new(fx2,fy2)
                     o.tracer.Color   = col
                     o.tracer.Visible = true
@@ -952,55 +962,48 @@ end)
 
 -- ================================================================
 --  SILENT AIM
---  Works by warping the mouse cursor to the target's screen position
---  at the moment LMB is pressed, so the tool's server raycast hits
---  the target. The mouse is restored the next frame invisibly.
+--  Hooks Mouse.Hit via the game metatable so every tool that reads
+--  Mouse.Hit automatically gets a redirected CFrame pointing at the
+--  target — no camera movement, no visible mouse warp.
+--  This is the correct method. Prediction compensates for latency.
 -- ================================================================
-local silentOriginalMouse = nil
+local SILENT_PREDICTION = 0.18   -- studs of velocity prediction
 
-RunService.RenderStepped:Connect(function()
-    if silentAimActive and silentAimTarget then
-        local lmbDown = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
-        local justClicked = lmbDown and not silentLmbWasDown
+local function installSilentHook()
+    local ok, mt = pcall(getrawmetatable, game)
+    if not ok or not mt then return end
 
-        if justClicked then
-            local tool = character and character:FindFirstChildOfClass("Tool")
-            if tool then
-                local aimPos = getAimPosition(silentAimTarget)
-                if aimPos then
-                    -- Project target bone to screen
-                    local sp, vis = camera:WorldToViewportPoint(aimPos)
-                    if vis then
-                        -- Save current mouse position
-                        silentOriginalMouse = UserInputService:GetMouseLocation()
-                        -- Warp mouse to target screen position
-                        pcall(function()
-                            VIM:SendMouseMoveEvent(sp.X, sp.Y, game)
-                        end)
-                        -- Restore mouse next frame so player never sees it move
-                        task.defer(function()
-                            if silentOriginalMouse then
-                                pcall(function()
-                                    VIM:SendMouseMoveEvent(silentOriginalMouse.X, silentOriginalMouse.Y, game)
-                                end)
-                                silentOriginalMouse = nil
-                            end
-                        end)
+    pcall(setreadonly, mt, false)
+
+    local originalIndex = mt.__index
+    mt.__index = newcclosure(function(self, key)
+        if silentAimActive and silentAimTarget and key == "Hit" then
+            local mouse = player:GetMouse()
+            if self == mouse then
+                local target = silentAimTarget
+                if target and target.Character then
+                    local part = aimBone == "Head"
+                        and target.Character:FindFirstChild("Head")
+                        or  target.Character:FindFirstChild("UpperTorso")
+                        or  target.Character:FindFirstChild("Torso")
+                        or  target.Character:FindFirstChild("HumanoidRootPart")
+                    if part then
+                        -- Apply velocity prediction to compensate for ping
+                        local predictedCF = part.CFrame + (part.Velocity * SILENT_PREDICTION)
+                        return predictedCF
                     end
                 end
             end
         end
-        silentLmbWasDown = lmbDown
-    else
-        silentLmbWasDown = false
-        -- Restore mouse if we had it warped
-        if silentOriginalMouse then
-            pcall(function() VIM:SendMouseMoveEvent(silentOriginalMouse.X, silentOriginalMouse.Y, game) end)
-            silentOriginalMouse = nil
-        end
-    end
+        return originalIndex(self, key)
+    end)
 
-    -- Target selection
+    pcall(setreadonly, mt, true)
+end
+pcall(installSilentHook)
+
+-- Target selection loop (separate from the hook, just picks who to aim at)
+RunService.RenderStepped:Connect(function()
     if not silentAimActive then
         if silentAimTarget then silentAimTarget=nil; updateAllESPColors() end
         silentWasHeld=false; silentAimLocked=false; return
@@ -1169,6 +1172,36 @@ makeToggle("ESP  -  Health Bar", function(on) espHealthOn=on end, charPage)
 makeToggle("ESP  -  Name",       function(on) espNameOn=on   end, charPage)
 makeToggle("ESP  -  Bones",      function(on) espBoneOn=on   end, charPage)
 makeToggle("ESP  -  Tracers",    function(on) espTracerOn=on end, charPage)
+
+-- Tracer origin selector
+do
+    local originRow = make("Frame",{Size=UDim2.new(1,0,0,28),BackgroundTransparency=1},charPage)
+    make("UIListLayout",{FillDirection=Enum.FillDirection.Horizontal,Padding=UDim.new(0,4)},originRow)
+    make("TextLabel",{Text="Tracers from:",Size=UDim2.new(0,82,1,0),BackgroundTransparency=1,
+        TextColor3=C.textDim,TextSize=10,Font=Enum.Font.Gotham,
+        TextXAlignment=Enum.TextXAlignment.Left},originRow)
+    local origins = {"Bottom","Middle","Top"}
+    local oBtns = {}
+    local function selectOrigin(name)
+        tracerOrigin = name
+        for _,n in ipairs(origins) do
+            oBtns[n].BackgroundColor3 = n==name and C.accent or C.bg3
+            oBtns[n].TextColor3       = n==name and C.textBright or C.textDim
+        end
+    end
+    for _,name in ipairs(origins) do
+        local b = make("TextButton",{Text=name,Size=UDim2.new(0,66,1,-4),
+            BackgroundColor3=C.bg3,TextColor3=C.textDim,TextSize=10,
+            Font=Enum.Font.GothamBold,BorderSizePixel=0},originRow)
+        corner(b,5)
+        oBtns[name]=b
+        b.MouseButton1Click:Connect(function() selectOrigin(name) end)
+    end
+    selectOrigin("Bottom")
+end
+
+-- Silent aim prediction slider
+makeSlider("Silent Prediction",0,40,18,"ms",function(v) SILENT_PREDICTION=v/100 end, charPage)
 
 sectionLabel("MOVEMENT", charPage)
 makeSlider("Walk Speed",16,300,16,"",function(v) currentSpeed=v end, charPage)
