@@ -274,6 +274,12 @@ UserInputService.InputBegan:Connect(function(inp,gpe)
         bl=inp.KeyCode.Name; bk=inp.KeyCode
     elseif inp.UserInputType==Enum.UserInputType.MouseButton2 then
         bl="RMB"; bk=Enum.UserInputType.MouseButton2
+    elseif inp.UserInputType==Enum.UserInputType.MouseButton3 then
+        bl="M3";  bk=Enum.UserInputType.MouseButton3
+    elseif inp.UserInputType==Enum.UserInputType.MouseX1Button then
+        bl="Side1"; bk=Enum.UserInputType.MouseX1Button
+    elseif inp.UserInputType==Enum.UserInputType.MouseX2Button then
+        bl="Side2"; bk=Enum.UserInputType.MouseX2Button
     else return end
     local saved=kbCallback; closeKeybindCapture(); if saved then saved(bk,bl) end
 end)
@@ -355,6 +361,23 @@ local lastTriggerShot = 0
 
 local toggleStates = {}
 local ESP_OBJECTS  = {}
+
+-- Triggerbot release delay
+local TRIGGER_RELEASE_DELAY = 0.05
+local lastTriggerRelease    = 0
+local triggerPressed        = false   -- tracks whether we already sent a down event
+
+-- Auto Kill
+local autoKillActive   = false
+local autoKillTarget   = nil
+local autoKillConn     = nil
+
+-- Auto Reload
+local autoReloadActive = false
+local autoReloadConn   = nil
+
+-- Always mode (triggerbot fires continuously without holding)
+local triggerbotAlways = false
 
 local fovCircle = Drawing.new("Circle")
 fovCircle.Visible=false; fovCircle.Radius=LEGIT_FOV
@@ -735,8 +758,15 @@ end
 -- ================================================================
 local function isKeyHeld(bind)
     if typeof(bind)~="EnumItem" then return false end
-    if bind.EnumType==Enum.KeyCode then return UserInputService:IsKeyDown(bind)
-    elseif bind.EnumType==Enum.UserInputType then return UserInputService:IsMouseButtonPressed(bind) end
+    if bind.EnumType==Enum.KeyCode then
+        return UserInputService:IsKeyDown(bind)
+    elseif bind.EnumType==Enum.UserInputType then
+        -- MouseButton1/2/3 and side buttons (X1, X2) all work via IsMouseButtonPressed
+        local ok, result = pcall(function()
+            return UserInputService:IsMouseButtonPressed(bind)
+        end)
+        return ok and result
+    end
     return false
 end
 
@@ -1048,19 +1078,46 @@ player.CharacterAdded:Connect(function(char)
 end)
 
 -- ================================================================
---  TRIGGERBOT
+--  TRIGGERBOT  (with press delay, release delay, always mode)
 -- ================================================================
 RunService.Heartbeat:Connect(function()
-    if not triggerbotActive then return end
-    local held=isKeyHeld(triggerKeybind)
-    local jp=held and not triggerWasHeld
-    if triggerbotSticky then
-        if jp then triggerbotLocked=not triggerbotLocked end
-        triggerWasHeld=held; if not triggerbotLocked then return end
-    else
-        triggerWasHeld=held; if not held then return end
+    if not triggerbotActive then
+        -- Make sure we release if we were holding
+        if triggerPressed then
+            local mp=UserInputService:GetMouseLocation()
+            pcall(function() VIM:SendMouseButtonEvent(mp.X,mp.Y,0,false,game,1) end)
+            triggerPressed=false
+        end
+        return
     end
-    if tick()-lastTriggerShot<TRIGGER_DELAY then return end
+
+    local shouldFire = false
+    if triggerbotAlways then
+        -- Always mode: fire continuously, no key needed
+        shouldFire = true
+    elseif triggerbotSticky then
+        local held=isKeyHeld(triggerKeybind)
+        local jp=held and not triggerWasHeld
+        if jp then triggerbotLocked=not triggerbotLocked end
+        triggerWasHeld=held
+        shouldFire = triggerbotLocked
+    else
+        local held=isKeyHeld(triggerKeybind)
+        triggerWasHeld=held
+        shouldFire = held
+    end
+
+    if not shouldFire then
+        if triggerPressed and tick()-lastTriggerRelease >= TRIGGER_RELEASE_DELAY then
+            local mp=UserInputService:GetMouseLocation()
+            pcall(function() VIM:SendMouseButtonEvent(mp.X,mp.Y,0,false,game,1) end)
+            triggerPressed=false
+        end
+        return
+    end
+
+    if tick()-lastTriggerShot < TRIGGER_DELAY then return end
+
     local tool=character and character:FindFirstChildOfClass("Tool"); if not tool then return end
     local mp=UserInputService:GetMouseLocation()
     local ur=camera:ScreenPointToRay(mp.X,mp.Y)
@@ -1071,12 +1128,95 @@ RunService.Heartbeat:Connect(function()
     local hc=res.Instance:FindFirstAncestorOfClass("Model"); if not hc then return end
     local hp=Players:GetPlayerFromCharacter(hc); if not hp or hp==player then return end
     local hum=hc:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
-    pcall(function()
-        VIM:SendMouseButtonEvent(mp.X,mp.Y,0,true,game,1)
-        VIM:SendMouseButtonEvent(mp.X,mp.Y,0,false,game,1)
-    end)
+
+    -- Press down
+    pcall(function() VIM:SendMouseButtonEvent(mp.X,mp.Y,0,true,game,1) end)
+    triggerPressed=true
     lastTriggerShot=tick()
+
+    -- Schedule release after TRIGGER_RELEASE_DELAY
+    task.delay(TRIGGER_RELEASE_DELAY, function()
+        local mp2=UserInputService:GetMouseLocation()
+        pcall(function() VIM:SendMouseButtonEvent(mp2.X,mp2.Y,0,false,game,1) end)
+        triggerPressed=false
+        lastTriggerRelease=tick()
+    end)
 end)
+
+-- ================================================================
+--  AUTO RELOAD  (presses R when clip is low / empty)
+-- ================================================================
+local function startAutoReload()
+    if autoReloadConn then autoReloadConn:Disconnect() end
+    autoReloadConn = RunService.Heartbeat:Connect(function()
+        if not autoReloadActive then return end
+        local tool = character and character:FindFirstChildOfClass("Tool")
+        if not tool then return end
+        -- Look for ammo values in the tool (common patterns)
+        local ammo = tool:FindFirstChild("Ammo") or tool:FindFirstChild("ammo")
+                  or tool:FindFirstChild("CurrentAmmo") or tool:FindFirstChild("Bullets")
+        if ammo and ammo:IsA("IntValue") or (ammo and ammo:IsA("NumberValue")) then
+            if ammo.Value <= 0 then
+                pcall(function()
+                    VIM:SendKeyEvent(true,  Enum.KeyCode.R, false, game)
+                    task.wait(0.05)
+                    VIM:SendKeyEvent(false, Enum.KeyCode.R, false, game)
+                end)
+            end
+        else
+            -- Fallback: watch for tool fire remote events to count shots
+            -- Just press R when the tool fires and has no ammo child
+        end
+    end)
+end
+
+local function stopAutoReload()
+    if autoReloadConn then autoReloadConn:Disconnect(); autoReloadConn=nil end
+end
+
+-- ================================================================
+--  AUTO KILL  (TP to target every frame, re-acquire after death)
+-- ================================================================
+local autoKillRageKeybind = Enum.UserInputType.MouseButton2
+
+local function stopAutoKill()
+    autoKillActive=false
+    if autoKillConn then autoKillConn:Disconnect(); autoKillConn=nil end
+    autoKillTarget=nil
+end
+
+local function startAutoKill(target)
+    stopAutoKill()
+    autoKillTarget=target
+    autoKillActive=true
+
+    autoKillConn=RunService.Heartbeat:Connect(function()
+        if not autoKillActive then return end
+
+        -- Re-acquire target if they respawned
+        if not autoKillTarget or not autoKillTarget.Character
+            or not autoKillTarget.Character:FindFirstChild("HumanoidRootPart") then
+            -- Wait for them to respawn then teleport
+            if autoKillTarget then
+                local newChar = autoKillTarget.Character
+                if newChar then
+                    local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
+                    if hrp then
+                        task.wait(0.1)  -- tiny wait so their spawn loads
+                    end
+                end
+            end
+            return
+        end
+
+        local tHrp = autoKillTarget.Character:FindFirstChild("HumanoidRootPart")
+        local mHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if tHrp and mHrp then
+            -- TP directly onto them
+            mHrp.CFrame = tHrp.CFrame * CFrame.new(0, 0, -1.5)
+        end
+    end)
+end
 
 -- ================================================================
 --  BUILD  ──  AIMING TAB
@@ -1123,14 +1263,23 @@ makeCombatRow("Silent Aim",silentKBL,
     function(k,l) silentKeybind=k; silentKBL=l end,
     function(tog) silentAimSticky=tog; silentAimTarget=nil;silentAimLocked=false;updateAllESPColors() end,
     aimPage)
+makeSlider("Silent Prediction",0,40,18,"ms",function(v) SILENT_PREDICTION=v/100 end, aimPage)
 
 sectionLabel("TRIGGERBOT", aimPage)
 makeCombatRow("Triggerbot",triggerKBL,
-    function(on) triggerbotActive=on; if not on then triggerbotLocked=false end end,
+    function(on) triggerbotActive=on; if not on then triggerbotLocked=false; triggerbotAlways=false end end,
     function(k,l) triggerKeybind=k; triggerKBL=l end,
     function(tog) triggerbotSticky=tog; triggerbotLocked=false end,
     aimPage)
-makeSlider("Trigger Delay",10,300,60,"ms",function(v) TRIGGER_DELAY=v/1000 end, aimPage)
+makeSlider("Press Delay",5,200,60,"ms",function(v) TRIGGER_DELAY=v/1000 end, aimPage)
+makeSlider("Release Delay",5,200,50,"ms",function(v) TRIGGER_RELEASE_DELAY=v/1000 end, aimPage)
+makeToggle("Triggerbot  -  Always Fire",function(on)
+    triggerbotAlways=on
+    -- Always mode auto-enables triggerbot
+    if on and not toggleStates["Triggerbot"] then
+        toggleStates["Triggerbot"]=true; triggerbotActive=true
+    end
+end, aimPage)
 
 makeToggle("God Mode  (Local)",function(on)
     local c=player.Character; local hum=c and c:FindFirstChildOfClass("Humanoid")
@@ -1169,6 +1318,53 @@ end, ragePage)
 makeScrollRow("Orbit Speed",0.5,8,1.5," r/s",function(v) orbitSpeed=v end, ragePage)
 makeScrollRow("Orbit Height",4,60,15," st",function(v) orbitHeight=v end, ragePage)
 makeScrollRow("Orbit Radius",3,40,8," st",function(v) orbitRadius=v end, ragePage)
+
+sectionLabel("AUTO KILL", ragePage)
+make("TextLabel",{
+    Text="Select target from Players tab. Auto Kill TPs you onto them and re-acquires after death. Auto enables: Rage Aimbot (Toggle), Triggerbot (Always), Auto Reload.",
+    Size=UDim2.new(1,0,0,42),BackgroundTransparency=1,TextColor3=C.textDim,
+    TextSize=10,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,
+},ragePage)
+
+makeToggle("Auto Kill  (selected player)",function(on)
+    if on then
+        if not autoKillTarget then
+            toggleStates["Auto Kill  (selected player)"]=false
+            make("TextLabel",{Text="No target selected. Use Players tab first.",
+                Size=UDim2.new(1,0,0,18),BackgroundTransparency=1,TextColor3=C.red,
+                TextSize=10,Font=Enum.Font.Gotham},ragePage)
+            return
+        end
+        startAutoKill(autoKillTarget)
+
+        -- Auto-enable: Rage Aimbot set to TOGGLE mode, lock onto target
+        rageAimActive=true; rageAimSticky=true
+        rageAimTarget=autoKillTarget; rageAimLocked=true
+        updateAllESPColors()
+
+        -- Auto-enable: Triggerbot set to Always mode
+        triggerbotActive=true; triggerbotAlways=true
+        toggleStates["Triggerbot"]=true
+        toggleStates["Triggerbot  -  Always Fire"]=true
+
+        -- Auto-enable: Auto Reload
+        autoReloadActive=true; startAutoReload()
+        toggleStates["Auto Reload"]=true
+    else
+        stopAutoKill()
+        -- Also turn off auto reload when auto kill stops
+        autoReloadActive=false; stopAutoReload()
+        toggleStates["Auto Reload"]=false
+        triggerbotAlways=false
+        toggleStates["Triggerbot  -  Always Fire"]=false
+    end
+end, ragePage)
+
+sectionLabel("AUTO RELOAD", ragePage)
+makeToggle("Auto Reload",function(on)
+    autoReloadActive=on
+    if on then startAutoReload() else stopAutoReload() end
+end, ragePage)
 
 -- ================================================================
 --  BUILD  ──  CHARACTER TAB
@@ -1209,9 +1405,6 @@ do
     end
     selectOrigin("Bottom")
 end
-
--- Silent aim prediction slider
-makeSlider("Silent Prediction",0,40,18,"ms",function(v) SILENT_PREDICTION=v/100 end, charPage)
 
 sectionLabel("MOVEMENT", charPage)
 makeSlider("Walk Speed",16,300,16,"",function(v) currentSpeed=v end, charPage)
@@ -1386,13 +1579,46 @@ local function buildPlayerRow(target)
             BackgroundColor3=col,TextColor3=C.textBright,TextSize=10,Font=Enum.Font.GothamBold,BorderSizePixel=0},row)
         corner(b,5); return b
     end
-    local orbitBtn=aBtn("Orbit",  Color3.fromRGB(80,50,160), -264)
-    local specBtn =aBtn("Spectate",Color3.fromRGB(42,98,180),-204)
-    local tpBtn   =aBtn("Teleport",Color3.fromRGB(32,128,65),-144)
-    local flBtn   =aBtn("Fling",   C.red,                    -84)
+    local killBtn =aBtn("AutoKill",Color3.fromRGB(160,30,30),  -330)
+    local orbitBtn=aBtn("Orbit",  Color3.fromRGB(80,50,160),  -268)
+    local specBtn =aBtn("Spectate",Color3.fromRGB(42,98,180), -208)
+    local tpBtn   =aBtn("Teleport",Color3.fromRGB(32,128,65), -148)
+    local flBtn   =aBtn("Fling",   C.red,                     -88)
 
+    killBtn.Name="KillBtn"
     orbitBtn.Name="OrbitBtn"
     specBtn.Name="SpecBtn"
+
+    killBtn.MouseButton1Click:Connect(function()
+        if autoKillActive and autoKillTarget==target then
+            stopAutoKill()
+            killBtn.Text="AutoKill"; killBtn.BackgroundColor3=Color3.fromRGB(160,30,30)
+            toggleStates["Auto Kill  (selected player)"]=false
+            autoReloadActive=false; stopAutoReload()
+            triggerbotAlways=false
+        else
+            autoKillTarget=target
+            -- Fire the toggle
+            toggleStates["Auto Kill  (selected player)"]=true
+            startAutoKill(target)
+            rageAimActive=true; rageAimSticky=true
+            rageAimTarget=target; rageAimLocked=true
+            updateAllESPColors()
+            triggerbotActive=true; triggerbotAlways=true
+            toggleStates["Triggerbot"]=true
+            toggleStates["Triggerbot  -  Always Fire"]=true
+            autoReloadActive=true; startAutoReload()
+            toggleStates["Auto Reload"]=true
+            killBtn.Text="Stop Kill"; killBtn.BackgroundColor3=C.red
+            -- Reset other kill buttons
+            for p2,r2 in pairs(plRows) do
+                if p2~=target then
+                    local kb=r2:FindFirstChild("KillBtn")
+                    if kb then kb.Text="AutoKill"; kb.BackgroundColor3=Color3.fromRGB(160,30,30) end
+                end
+            end
+        end
+    end)
 
     orbitBtn.MouseButton1Click:Connect(function()
         if orbitActive and orbitTarget==target then
