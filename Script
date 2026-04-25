@@ -24,22 +24,26 @@ end)
 --  PALETTE
 -- ================================================================
 local C = {
-    bg          = Color3.fromRGB(9,  8,  18),
-    bg2         = Color3.fromRGB(15, 13, 28),
-    bg3         = Color3.fromRGB(22, 19, 40),
-    accent      = Color3.fromRGB(105, 55, 215),
-    accentBright= Color3.fromRGB(140, 85, 255),
-    accentDim   = Color3.fromRGB(55,  30, 115),
-    border      = Color3.fromRGB(50,  33, 95),
-    borderOn    = Color3.fromRGB(105, 55, 215),
-    text        = Color3.fromRGB(205, 200, 225),
-    textDim     = Color3.fromRGB(130, 122, 158),
+    bg          = Color3.fromRGB(8,   7,  16),
+    bg2         = Color3.fromRGB(13,  11, 24),
+    bg3         = Color3.fromRGB(20,  17, 36),
+    bg4         = Color3.fromRGB(28,  24, 50),
+    accent      = Color3.fromRGB(108, 52, 220),
+    accentBright= Color3.fromRGB(148, 92, 255),
+    accentDim   = Color3.fromRGB(52,  28, 112),
+    accentGlow  = Color3.fromRGB(180,130, 255),
+    border      = Color3.fromRGB(45,  30,  88),
+    borderOn    = Color3.fromRGB(108, 52, 220),
+    text        = Color3.fromRGB(200, 195, 222),
+    textDim     = Color3.fromRGB(115, 108, 145),
     textBright  = Color3.fromRGB(255, 255, 255),
-    on          = Color3.fromRGB(70,  215, 105),
-    off         = Color3.fromRGB(65,  60,  90),
-    red         = Color3.fromRGB(195, 45,  65),
-    orange      = Color3.fromRGB(210, 100, 30),
-    titleBar    = Color3.fromRGB(55,  22,  125),
+    on          = Color3.fromRGB(65,  210, 100),
+    onGlow      = Color3.fromRGB(100, 255, 140),
+    off         = Color3.fromRGB(55,  50,  80),
+    red         = Color3.fromRGB(200, 45,  65),
+    orange      = Color3.fromRGB(215, 105, 30),
+    titleBar    = Color3.fromRGB(50,  18, 118),
+    titleBar2   = Color3.fromRGB(72,  30, 155),
 }
 
 -- ================================================================
@@ -84,27 +88,80 @@ local dragCapture = make("Frame",{
     Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,ZIndex=200,Visible=false,
 },screenGui)
 
+-- Shadow layer (sits behind mainFrame)
+local shadowFrame = make("Frame",{
+    Size=UDim2.new(1,20,1,20),
+    Position=UDim2.new(0,-10,0,8),
+    BackgroundColor3=Color3.fromRGB(0,0,0),
+    BackgroundTransparency=0.55,
+    BorderSizePixel=0,
+    ZIndex=0,
+},screenGui)
+corner(shadowFrame,14)
+
 local mainFrame = make("Frame",{
     Name="Main",Size=UDim2.new(0,400,0,520),Position=UDim2.new(0,80,0,60),
     BackgroundColor3=C.bg,BorderSizePixel=0,ClipsDescendants=false,
+    ZIndex=1,Visible=false,
 },screenGui)
 corner(mainFrame,10)
-stroke(mainFrame,C.accentDim,1.5)
+stroke(mainFrame,C.accentDim,1.8)
 make("UIGradient",{
     Color=ColorSequence.new({
-        ColorSequenceKeypoint.new(0,Color3.fromRGB(13,11,26)),
-        ColorSequenceKeypoint.new(1,Color3.fromRGB(7,6,15)),
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(14,12,28)),
+        ColorSequenceKeypoint.new(0.5,Color3.fromRGB(10,8,20)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(6,5,13)),
     }),
-    Rotation=135,
+    Rotation=145,
 },mainFrame)
+
+-- Accent line at very top of window
+local topAccent = make("Frame",{
+    Size=UDim2.new(0.6,0,0,2),
+    Position=UDim2.new(0.2,0,0,0),
+    BackgroundColor3=C.accentBright,
+    BorderSizePixel=0,
+    ZIndex=5,
+},mainFrame)
+corner(topAccent,2)
+make("UIGradient",{
+    Color=ColorSequence.new({
+        ColorSequenceKeypoint.new(0,Color3.fromRGB(0,0,0)),
+        ColorSequenceKeypoint.new(0.5,C.accentBright),
+        ColorSequenceKeypoint.new(1,Color3.fromRGB(0,0,0)),
+    }),
+},topAccent)
+
+-- Keep shadow anchored to mainFrame
+RunService.RenderStepped:Connect(function()
+    shadowFrame.Position = UDim2.new(
+        mainFrame.Position.X.Scale, mainFrame.Position.X.Offset - 10,
+        mainFrame.Position.Y.Scale, mainFrame.Position.Y.Offset + 8
+    )
+end)
 
 -- Title bar
 local titleBar = make("Frame",{
-    Size=UDim2.new(1,0,0,40),BackgroundColor3=C.titleBar,BorderSizePixel=0,ZIndex=2,
+    Size=UDim2.new(1,0,0,44),BackgroundColor3=C.titleBar,BorderSizePixel=0,ZIndex=2,
 },mainFrame)
 corner(titleBar,10)
+-- Gradient title bar
+make("UIGradient",{
+    Color=ColorSequence.new({
+        ColorSequenceKeypoint.new(0, C.titleBar2),
+        ColorSequenceKeypoint.new(1, C.titleBar),
+    }),
+    Rotation=90,
+},titleBar)
 make("Frame",{Size=UDim2.new(1,0,0.5,0),Position=UDim2.new(0,0,0.5,0),
     BackgroundColor3=C.titleBar,BorderSizePixel=0,ZIndex=2},titleBar)
+make("UIGradient",{
+    Color=ColorSequence.new({
+        ColorSequenceKeypoint.new(0,C.titleBar2),
+        ColorSequenceKeypoint.new(1,C.titleBar),
+    }),
+    Rotation=90,
+},titleBar:FindFirstChildOfClass("Frame"))
 make("TextLabel",{Text="SENETCHA",Size=UDim2.new(0,120,0,22),Position=UDim2.new(0,10,0,9),
     BackgroundTransparency=1,TextColor3=C.textBright,TextSize=15,Font=Enum.Font.GothamBold,
     TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3},titleBar)
@@ -126,9 +183,10 @@ corner(closeBtn,6)
 local TAB_NAMES = {"Aiming","Rage","Character","Misc","Players"}
 
 local tabStrip = make("Frame",{
-    Size=UDim2.new(1,0,0,32),Position=UDim2.new(0,0,0,40),
+    Size=UDim2.new(1,0,0,34),Position=UDim2.new(0,0,0,44),
     BackgroundColor3=C.bg2,BorderSizePixel=0,
 },mainFrame)
+stroke(tabStrip, C.border, 1)
 
 make("UIListLayout",{
     FillDirection=Enum.FillDirection.Horizontal,
@@ -138,7 +196,7 @@ make("UIListLayout",{
 padding(tabStrip,4,4,3,3)
 
 local contentArea = make("Frame",{
-    Size=UDim2.new(1,0,1,-72),Position=UDim2.new(0,0,0,72),
+    Size=UDim2.new(1,0,1,-80),Position=UDim2.new(0,0,0,80),
     BackgroundTransparency=1,ClipsDescendants=true,
 },mainFrame)
 
@@ -163,9 +221,13 @@ local function switchTab(name)
         if tabBtns[n] then
             local isRage = (n=="Rage")
             local active = (n==name)
-            tabBtns[n].BackgroundTransparency = active and 0 or 1
-            tabBtns[n].BackgroundColor3 = active and (isRage and C.orange or C.accent) or Color3.fromRGB(0,0,0)
-            tabBtns[n].TextColor3 = active and C.textBright or C.textDim
+            local targetColor = active and (isRage and C.orange or C.accent) or Color3.fromRGB(0,0,0)
+            local targetText  = active and C.textBright or C.textDim
+            TweenService:Create(tabBtns[n], TweenInfo.new(0.15, Enum.EasingStyle.Quad), {
+                BackgroundColor3       = targetColor,
+                BackgroundTransparency = active and 0 or 1,
+                TextColor3             = targetText,
+            }):Play()
         end
     end
 end
@@ -196,13 +258,29 @@ local plPage   = tabPages["Players"]
 
 -- Minimise / Close
 local minimised = false
-closeBtn.MouseButton1Click:Connect(function() mainFrame.Visible=false end)
+closeBtn.MouseButton1Click:Connect(function()
+    TweenService:Create(mainFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        BackgroundTransparency=1,
+        Size=UDim2.new(0,400,0,460),
+    }):Play()
+    task.delay(0.22, function() mainFrame.Visible=false; mainFrame.BackgroundTransparency=0; mainFrame.Size=UDim2.new(0,400,0,520) end)
+end)
 minBtn.MouseButton1Click:Connect(function()
     minimised=not minimised
-    contentArea.Visible=not minimised
-    tabStrip.Visible=not minimised
-    mainFrame.Size=minimised and UDim2.new(0,400,0,40) or UDim2.new(0,400,0,520)
     minBtn.Text=minimised and "+" or "-"
+    if minimised then
+        TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+            Size=UDim2.new(0,400,0,44),
+        }):Play()
+        task.delay(0.15, function()
+            contentArea.Visible=false; tabStrip.Visible=false
+        end)
+    else
+        contentArea.Visible=true; tabStrip.Visible=true
+        TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size=UDim2.new(0,400,0,520),
+        }):Play()
+    end
 end)
 
 -- Dragging
@@ -416,49 +494,122 @@ fovCircle.Filled=false; fovCircle.Transparency=1
 --  UI BUILDERS
 -- ================================================================
 local function sectionLabel(text,page)
-    make("TextLabel",{
-        Text=text,Size=UDim2.new(1,0,0,16),
+    local f=make("Frame",{Size=UDim2.new(1,0,0,20),BackgroundTransparency=1},page)
+    make("TextLabel",{Text=text,Size=UDim2.new(1,-8,1,0),Position=UDim2.new(0,8,0,0),
         BackgroundTransparency=1,TextColor3=C.accentBright,
-        TextSize=10,Font=Enum.Font.GothamBold,
-        TextXAlignment=Enum.TextXAlignment.Left,
-    },page)
+        TextSize=9,Font=Enum.Font.GothamBold,
+        TextXAlignment=Enum.TextXAlignment.Left,LetterSpacing=2},f)
+    -- Underline
+    local line=make("Frame",{Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,1,-1),
+        BackgroundColor3=C.accentDim,BorderSizePixel=0},f)
+    make("UIGradient",{
+        Color=ColorSequence.new({
+            ColorSequenceKeypoint.new(0,C.accentBright),
+            ColorSequenceKeypoint.new(0.4,C.accentDim),
+            ColorSequenceKeypoint.new(1,Color3.fromRGB(0,0,0)),
+        }),
+    },line)
 end
 
 local function makeToggle(name,cb,page)
     page=page or miscPage
-    local row=make("TextButton",{Size=UDim2.new(1,0,0,30),BackgroundColor3=C.bg2,BorderSizePixel=0,Text=""},page)
-    corner(row,6); local rS=stroke(row,C.border,1)
-    make("TextLabel",{Text=name,Size=UDim2.new(1,-46,1,0),Position=UDim2.new(0,10,0,0),
+    local row=make("TextButton",{Size=UDim2.new(1,0,0,32),BackgroundColor3=C.bg2,BorderSizePixel=0,Text=""},page)
+    corner(row,7); local rS=stroke(row,C.border,1)
+
+    -- Left colour bar (hidden until active)
+    local bar=make("Frame",{Size=UDim2.new(0,2,0.7,0),Position=UDim2.new(0,0,0.15,0),
+        BackgroundColor3=C.accent,BorderSizePixel=0,BackgroundTransparency=1},row)
+    corner(bar,2)
+
+    make("TextLabel",{Text=name,Size=UDim2.new(1,-52,1,0),Position=UDim2.new(0,12,0,0),
         BackgroundTransparency=1,TextColor3=C.text,TextSize=11,Font=Enum.Font.Gotham,
         TextXAlignment=Enum.TextXAlignment.Left},row)
-    local dot=make("Frame",{Size=UDim2.new(0,9,0,9),Position=UDim2.new(1,-18,0.5,-4),
+
+    -- Toggle track (pill shape)
+    local track=make("Frame",{Size=UDim2.new(0,28,0,14),Position=UDim2.new(1,-36,0.5,-7),
         BackgroundColor3=C.off,BorderSizePixel=0},row)
-    corner(dot,9)
+    corner(track,7)
+
+    -- Toggle knob
+    local knob=make("Frame",{Size=UDim2.new(0,10,0,10),Position=UDim2.new(0,2,0.5,-5),
+        BackgroundColor3=Color3.fromRGB(180,175,200),BorderSizePixel=0},track)
+    corner(knob,9)
+
     toggleStates[name]=false
+    local tweening=false
     local function setState(on)
         toggleStates[name]=on
-        dot.BackgroundColor3=on and C.on or C.off
-        row.BackgroundColor3=on and C.bg3 or C.bg2
-        rS.Color=on and C.borderOn or C.border
+        -- Animate knob position
+        TweenService:Create(knob,TweenInfo.new(0.15,Enum.EasingStyle.Quad),{
+            Position=on and UDim2.new(1,-12,0.5,-5) or UDim2.new(0,2,0.5,-5),
+            BackgroundColor3=on and Color3.fromRGB(255,255,255) or Color3.fromRGB(180,175,200),
+        }):Play()
+        TweenService:Create(track,TweenInfo.new(0.15,Enum.EasingStyle.Quad),{
+            BackgroundColor3=on and C.accent or C.off,
+        }):Play()
+        TweenService:Create(row,TweenInfo.new(0.12,Enum.EasingStyle.Quad),{
+            BackgroundColor3=on and C.bg3 or C.bg2,
+        }):Play()
+        TweenService:Create(rS,TweenInfo.new(0.12),{
+            Color=on and C.borderOn or C.border,
+        }):Play()
+        bar.BackgroundTransparency=on and 0 or 1
     end
+
+    -- Hover effect
+    row.MouseEnter:Connect(function()
+        if not toggleStates[name] then
+            TweenService:Create(row,TweenInfo.new(0.1),{BackgroundColor3=C.bg3}):Play()
+        end
+    end)
+    row.MouseLeave:Connect(function()
+        if not toggleStates[name] then
+            TweenService:Create(row,TweenInfo.new(0.1),{BackgroundColor3=C.bg2}):Play()
+        end
+    end)
+
     row.MouseButton1Click:Connect(function() setState(not toggleStates[name]); cb(toggleStates[name]) end)
     return setState
 end
 
 local function makeSlider(name,minV,maxV,defV,suffix,cb,page)
     page=page or miscPage; suffix=suffix or ""
-    local f=make("Frame",{Size=UDim2.new(1,0,0,46),BackgroundColor3=C.bg2,BorderSizePixel=0},page)
-    corner(f,6); stroke(f,C.border,1)
+    local f=make("Frame",{Size=UDim2.new(1,0,0,48),BackgroundColor3=C.bg2,BorderSizePixel=0},page)
+    corner(f,7); stroke(f,C.border,1)
+
+    -- Value label (right-aligned)
     local cv=defV
-    local vL=make("TextLabel",{Text=name..":  "..cv..suffix,Size=UDim2.new(1,-16,0,18),
-        Position=UDim2.new(0,8,0,4),BackgroundTransparency=1,TextColor3=C.text,
-        TextSize=11,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left},f)
-    local track=make("Frame",{Size=UDim2.new(1,-16,0,4),Position=UDim2.new(0,8,0,30),
-        BackgroundColor3=C.bg3,BorderSizePixel=0},f)
+    make("TextLabel",{Text=name,Size=UDim2.new(0.65,0,0,20),Position=UDim2.new(0,10,0,5),
+        BackgroundTransparency=1,TextColor3=C.text,TextSize=11,Font=Enum.Font.Gotham,
+        TextXAlignment=Enum.TextXAlignment.Left},f)
+    local vL=make("TextLabel",{Text=tostring(cv)..suffix,Size=UDim2.new(0.35,-10,0,20),
+        Position=UDim2.new(0.65,0,0,5),BackgroundTransparency=1,TextColor3=C.accentBright,
+        TextSize=11,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Right},f)
+
+    local track=make("Frame",{Size=UDim2.new(1,-20,0,4),Position=UDim2.new(0,10,0,32),
+        BackgroundColor3=Color3.fromRGB(30,25,52),BorderSizePixel=0},f)
     corner(track,9)
+
     local fill=make("Frame",{Size=UDim2.new((defV-minV)/(maxV-minV),0,1,0),
         BackgroundColor3=C.accent,BorderSizePixel=0},track)
     corner(fill,9)
+    make("UIGradient",{
+        Color=ColorSequence.new({
+            ColorSequenceKeypoint.new(0,C.accent),
+            ColorSequenceKeypoint.new(1,C.accentBright),
+        }),
+    },fill)
+
+    -- Drag handle dot
+    local handle=make("Frame",{Size=UDim2.new(0,10,0,10),
+        BackgroundColor3=Color3.fromRGB(255,255,255),BorderSizePixel=0},track)
+    corner(handle,9)
+
+    local function updateHandle(r)
+        handle.Position=UDim2.new(r,-(10*r),0.5,-5)
+    end
+    updateHandle((defV-minV)/(maxV-minV))
+
     local drag=false
     track.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=true end end)
     UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end end)
@@ -467,11 +618,15 @@ local function makeSlider(name,minV,maxV,defV,suffix,cb,page)
         local mp=UserInputService:GetMouseLocation()
         local r=math.clamp((mp.X-track.AbsolutePosition.X)/track.AbsoluteSize.X,0,1)
         cv=math.floor(minV+r*(maxV-minV))
-        fill.Size=UDim2.new(r,0,1,0); vL.Text=name..":  "..cv..suffix; cb(cv)
+        fill.Size=UDim2.new(r,0,1,0)
+        vL.Text=tostring(cv)..suffix
+        updateHandle(r)
+        cb(cv)
     end)
-    return f,function(v) -- setter
+    return f,function(v)
         local r=(v-minV)/(maxV-minV)
-        cv=v; fill.Size=UDim2.new(r,0,1,0); vL.Text=name..":  "..cv..suffix
+        cv=v; fill.Size=UDim2.new(r,0,1,0)
+        vL.Text=tostring(cv)..suffix; updateHandle(r)
     end
 end
 
@@ -495,31 +650,60 @@ end
 -- Combat row: name + [KEY] + HOLD/TOGGLE
 local function makeCombatRow(name,defKey,onToggle,onKb,onMode,page)
     page=page or aimPage
-    local row=make("Frame",{Size=UDim2.new(1,0,0,30),BackgroundColor3=C.bg2,BorderSizePixel=0},page)
-    corner(row,6); local rS=stroke(row,C.border,1)
-    make("TextLabel",{Text=name,Size=UDim2.new(1,-200,1,0),Position=UDim2.new(0,10,0,0),
+    local row=make("Frame",{Size=UDim2.new(1,0,0,34),BackgroundColor3=C.bg2,BorderSizePixel=0},page)
+    corner(row,7); local rS=stroke(row,C.border,1)
+
+    -- Active left bar
+    local bar=make("Frame",{Size=UDim2.new(0,2,0.65,0),Position=UDim2.new(0,0,0.175,0),
+        BackgroundColor3=C.accent,BorderSizePixel=0,BackgroundTransparency=1},row)
+    corner(bar,2)
+
+    make("TextLabel",{Text=name,Size=UDim2.new(1,-205,1,0),Position=UDim2.new(0,12,0,0),
         BackgroundTransparency=1,TextColor3=C.text,TextSize=11,Font=Enum.Font.Gotham,
         TextXAlignment=Enum.TextXAlignment.Left},row)
-    local kbBtn=make("TextButton",{Text="["..defKey.."]",Size=UDim2.new(0,56,0,20),
-        Position=UDim2.new(1,-162,0.5,-10),BackgroundColor3=C.bg3,TextColor3=C.textDim,
+
+    local kbBtn=make("TextButton",{Text="["..defKey.."]",Size=UDim2.new(0,56,0,22),
+        Position=UDim2.new(1,-163,0.5,-11),BackgroundColor3=C.bg3,TextColor3=C.textDim,
         TextSize=10,Font=Enum.Font.GothamBold,BorderSizePixel=0},row)
     corner(kbBtn,5); stroke(kbBtn,C.border,1)
+
     local modeIsToggle=false
-    local modeBtn=make("TextButton",{Text="HOLD",Size=UDim2.new(0,50,0,20),
-        Position=UDim2.new(1,-102,0.5,-10),BackgroundColor3=C.bg3,TextColor3=C.textDim,
+    local modeBtn=make("TextButton",{Text="HOLD",Size=UDim2.new(0,50,0,22),
+        Position=UDim2.new(1,-103,0.5,-11),BackgroundColor3=C.bg3,TextColor3=C.textDim,
         TextSize=9,Font=Enum.Font.GothamBold,BorderSizePixel=0},row)
     corner(modeBtn,5); local mS=stroke(modeBtn,C.border,1)
-    local dot=make("Frame",{Size=UDim2.new(0,9,0,9),Position=UDim2.new(1,-16,0.5,-4),
+
+    -- Toggle track + knob (same pill as makeToggle)
+    local track=make("Frame",{Size=UDim2.new(0,28,0,14),Position=UDim2.new(1,-34,0.5,-7),
         BackgroundColor3=C.off,BorderSizePixel=0},row)
-    corner(dot,9)
-    local ta=make("TextButton",{Size=UDim2.new(1,-172,1,0),BackgroundTransparency=1,Text=""},row)
+    corner(track,7)
+    local knob=make("Frame",{Size=UDim2.new(0,10,0,10),Position=UDim2.new(0,2,0.5,-5),
+        BackgroundColor3=Color3.fromRGB(180,175,200),BorderSizePixel=0},track)
+    corner(knob,9)
+
+    local ta=make("TextButton",{Size=UDim2.new(1,-174,1,0),BackgroundTransparency=1,Text=""},row)
     toggleStates[name]=false
+
+    row.MouseEnter:Connect(function()
+        if not toggleStates[name] then TweenService:Create(row,TweenInfo.new(0.1),{BackgroundColor3=C.bg3}):Play() end
+    end)
+    row.MouseLeave:Connect(function()
+        if not toggleStates[name] then TweenService:Create(row,TweenInfo.new(0.1),{BackgroundColor3=C.bg2}):Play() end
+    end)
+
     ta.MouseButton1Click:Connect(function()
         toggleStates[name]=not toggleStates[name]; local on=toggleStates[name]
-        dot.BackgroundColor3=on and C.on or C.off
-        row.BackgroundColor3=on and C.bg3 or C.bg2
-        rS.Color=on and C.borderOn or C.border; onToggle(on)
+        TweenService:Create(knob,TweenInfo.new(0.15,Enum.EasingStyle.Quad),{
+            Position=on and UDim2.new(1,-12,0.5,-5) or UDim2.new(0,2,0.5,-5),
+            BackgroundColor3=on and Color3.fromRGB(255,255,255) or Color3.fromRGB(180,175,200),
+        }):Play()
+        TweenService:Create(track,TweenInfo.new(0.15),{BackgroundColor3=on and C.accent or C.off}):Play()
+        TweenService:Create(row,TweenInfo.new(0.12),{BackgroundColor3=on and C.bg3 or C.bg2}):Play()
+        TweenService:Create(rS,TweenInfo.new(0.12),{Color=on and C.borderOn or C.border}):Play()
+        bar.BackgroundTransparency=on and 0 or 1
+        onToggle(on)
     end)
+
     kbBtn.MouseButton1Click:Connect(function()
         task.spawn(openKeybindCapture,name,function(k,l) kbBtn.Text="["..l.."]"; onKb(k,l) end)
     end)
@@ -1628,9 +1812,15 @@ local orbitBtnMap={}  -- [player] = orbitBtn
 
 local function buildPlayerRow(target)
     if plRows[target] then return end
-    local row=make("Frame",{Size=UDim2.new(1,0,0,44),BackgroundColor3=C.bg2,BorderSizePixel=0},plPage)
+    local row=make("Frame",{Size=UDim2.new(1,0,0,46),BackgroundColor3=C.bg2,BorderSizePixel=0},plPage)
     corner(row,7); stroke(row,C.border,1)
-    make("TextLabel",{Text=target.Name,Size=UDim2.new(1,-270,1,0),Position=UDim2.new(0,10,0,0),
+    -- Player initial badge
+    local badge=make("Frame",{Size=UDim2.new(0,28,0,28),Position=UDim2.new(0,8,0.5,-14),
+        BackgroundColor3=C.accentDim,BorderSizePixel=0},row)
+    corner(badge,7)
+    make("TextLabel",{Text=string.sub(target.Name,1,1):upper(),Size=UDim2.new(1,0,1,0),
+        BackgroundTransparency=1,TextColor3=C.accentBright,TextSize=13,Font=Enum.Font.GothamBold},badge)
+    make("TextLabel",{Text=target.Name,Size=UDim2.new(1,-282,1,0),Position=UDim2.new(0,42,0,0),
         BackgroundTransparency=1,TextColor3=C.text,TextSize=12,Font=Enum.Font.GothamBold,
         TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd},row)
     local function aBtn(label,col,xOff)
@@ -1727,9 +1917,16 @@ end)
 --  ACTIVE HACKS OVERLAY
 -- ================================================================
 local hacksGui=make("ScreenGui",{Name="SenetchaHacks",ResetOnSpawn=false,DisplayOrder=10,IgnoreGuiInset=true},player.PlayerGui)
-local hacksWin=make("Frame",{Size=UDim2.new(0,190,0,22),Position=UDim2.new(1,-210,0,80),
-    BackgroundColor3=Color3.fromRGB(8,7,16),BorderSizePixel=0,ClipsDescendants=true},hacksGui)
-corner(hacksWin,7); stroke(hacksWin,C.accentDim,1.5)
+local hacksWin=make("Frame",{Size=UDim2.new(0,210,0,24),Position=UDim2.new(1,-228,0,80),
+    BackgroundColor3=Color3.fromRGB(7,6,14),BorderSizePixel=0,ClipsDescendants=true},hacksGui)
+corner(hacksWin,8); stroke(hacksWin,C.accentDim,1.5)
+make("UIGradient",{
+    Color=ColorSequence.new({
+        ColorSequenceKeypoint.new(0,Color3.fromRGB(12,10,22)),
+        ColorSequenceKeypoint.new(1,Color3.fromRGB(6,5,12)),
+    }),
+    Rotation=135,
+},hacksWin)
 local hacksTitle=make("Frame",{Size=UDim2.new(1,0,0,22),BackgroundColor3=C.titleBar,BorderSizePixel=0},hacksWin)
 corner(hacksTitle,7)
 make("Frame",{Size=UDim2.new(1,0,0.5,0),Position=UDim2.new(0,0,0.5,0),BackgroundColor3=C.titleBar,BorderSizePixel=0},hacksTitle)
@@ -1813,6 +2010,197 @@ UserInputService.InputBegan:Connect(function(inp,gpe)
     if kc==menuKeybind   then mainFrame.Visible=not mainFrame.Visible end
     if kc==flyKeybind    then flyActive=not flyActive end
     if kc==noclipKeybind then noclipActive=not noclipActive end
+end)
+
+-- ================================================================
+--  WINDOW OPEN ANIMATION
+-- ================================================================
+mainFrame.Position = UDim2.new(
+    mainFrame.Position.X.Scale,
+    mainFrame.Position.X.Offset,
+    mainFrame.Position.Y.Scale,
+    mainFrame.Position.Y.Offset + 30
+)
+mainFrame.BackgroundTransparency = 1
+local function animateIn()
+    TweenService:Create(mainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = UDim2.new(
+            mainFrame.Position.X.Scale,
+            mainFrame.Position.X.Offset,
+            mainFrame.Position.Y.Scale,
+            mainFrame.Position.Y.Offset - 30
+        ),
+        BackgroundTransparency = 0,
+    }):Play()
+end
+
+-- ================================================================
+--  LOADING SCREEN
+-- ================================================================
+local loadGui = make("ScreenGui", {
+    Name        = "SenetchaLoad",
+    ResetOnSpawn= false,
+    DisplayOrder= 500,
+    IgnoreGuiInset=true,
+}, player.PlayerGui)
+
+local loadBg = make("Frame", {
+    Size             = UDim2.new(1, 0, 1, 0),
+    BackgroundColor3 = Color3.fromRGB(5, 4, 12),
+    BorderSizePixel  = 0,
+}, loadGui)
+
+-- Animated background lines
+for i = 1, 6 do
+    local line = make("Frame", {
+        Size             = UDim2.new(1, 0, 0, 1),
+        Position         = UDim2.new(0, 0, i/7, 0),
+        BackgroundColor3 = Color3.fromRGB(60, 30, 120),
+        BackgroundTransparency = 0.7,
+        BorderSizePixel  = 0,
+    }, loadBg)
+    TweenService:Create(line, TweenInfo.new(
+        1.5 + i*0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true
+    ), {BackgroundTransparency = 0.95}):Play()
+end
+
+local loadCenter = make("Frame", {
+    Size             = UDim2.new(0, 320, 0, 200),
+    Position         = UDim2.new(0.5, -160, 0.5, -100),
+    BackgroundTransparency = 1,
+    BorderSizePixel  = 0,
+}, loadBg)
+
+-- Logo text
+local logoLbl = make("TextLabel", {
+    Text             = "SENETCHA",
+    Size             = UDim2.new(1, 0, 0, 60),
+    Position         = UDim2.new(0, 0, 0, 10),
+    BackgroundTransparency = 1,
+    TextColor3       = Color3.fromRGB(255, 255, 255),
+    TextSize         = 42,
+    Font             = Enum.Font.GothamBlack,
+    TextTransparency = 1,
+}, loadCenter)
+
+local subLbl = make("TextLabel", {
+    Text             = "LOCK HOOD EDITION",
+    Size             = UDim2.new(1, 0, 0, 22),
+    Position         = UDim2.new(0, 0, 0, 70),
+    BackgroundTransparency = 1,
+    TextColor3       = Color3.fromRGB(140, 85, 255),
+    TextSize         = 13,
+    Font             = Enum.Font.GothamBold,
+    TextTransparency = 1,
+    TextTracking     = 6,
+}, loadCenter)
+
+-- Progress bar track
+local barTrack = make("Frame", {
+    Size             = UDim2.new(0, 260, 0, 3),
+    Position         = UDim2.new(0, 30, 0, 118),
+    BackgroundColor3 = Color3.fromRGB(25, 20, 48),
+    BorderSizePixel  = 0,
+}, loadCenter)
+corner(barTrack, 9)
+
+local barFill = make("Frame", {
+    Size             = UDim2.new(0, 0, 1, 0),
+    BackgroundColor3 = Color3.fromRGB(108, 52, 220),
+    BorderSizePixel  = 0,
+}, barTrack)
+corner(barFill, 9)
+make("UIGradient", {
+    Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(108, 52, 220)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 130, 255)),
+    }),
+}, barFill)
+
+-- Shimmer on bar
+local shimmer = make("Frame", {
+    Size             = UDim2.new(0, 60, 1, 0),
+    BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+    BackgroundTransparency = 0.7,
+    BorderSizePixel  = 0,
+}, barFill)
+corner(shimmer, 9)
+
+local statusLbl = make("TextLabel", {
+    Text             = "Initialising...",
+    Size             = UDim2.new(1, 0, 0, 18),
+    Position         = UDim2.new(0, 0, 0, 132),
+    BackgroundTransparency = 1,
+    TextColor3       = Color3.fromRGB(115, 108, 145),
+    TextSize         = 11,
+    Font             = Enum.Font.Gotham,
+    TextTransparency = 1,
+}, loadCenter)
+
+local versionLbl = make("TextLabel", {
+    Text             = "v2.0  •  Lock Hood  •  All rights reserved",
+    Size             = UDim2.new(1, 0, 0, 16),
+    Position         = UDim2.new(0, 0, 1, -24),
+    BackgroundTransparency = 1,
+    TextColor3       = Color3.fromRGB(60, 55, 80),
+    TextSize         = 10,
+    Font             = Enum.Font.Gotham,
+}, loadBg)
+
+-- Loading sequence
+local STEPS = {
+    {text="Loading core modules...",   pct=0.18},
+    {text="Initialising ESP...",       pct=0.36},
+    {text="Hooking mouse metatable...",pct=0.54},
+    {text="Building interface...",     pct=0.72},
+    {text="Applying polish...",        pct=0.90},
+    {text="Ready.",                    pct=1.00},
+}
+
+task.spawn(function()
+    -- Fade in logo
+    TweenService:Create(logoLbl, TweenInfo.new(0.6, Enum.EasingStyle.Quad), {TextTransparency=0}):Play()
+    task.wait(0.3)
+    TweenService:Create(subLbl,  TweenInfo.new(0.5, Enum.EasingStyle.Quad), {TextTransparency=0}):Play()
+    TweenService:Create(statusLbl,TweenInfo.new(0.5,Enum.EasingStyle.Quad), {TextTransparency=0}):Play()
+    task.wait(0.5)
+
+    for _, step in ipairs(STEPS) do
+        statusLbl.Text = step.text
+        TweenService:Create(barFill, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
+            Size = UDim2.new(step.pct, 0, 1, 0),
+        }):Play()
+        -- Shimmer animation
+        shimmer.Position = UDim2.new(0, 0, 0, 0)
+        TweenService:Create(shimmer, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
+            Position = UDim2.new(1, -60, 0, 0),
+        }):Play()
+        task.wait(0.38)
+    end
+
+    task.wait(0.3)
+
+    -- Fade out loading screen
+    TweenService:Create(loadBg, TweenInfo.new(0.45, Enum.EasingStyle.Quad), {
+        BackgroundTransparency = 1,
+    }):Play()
+    for _, d in ipairs(loadBg:GetDescendants()) do
+        if d:IsA("Frame") or d:IsA("TextLabel") then
+            pcall(function()
+                TweenService:Create(d, TweenInfo.new(0.35, Enum.EasingStyle.Quad), {
+                    BackgroundTransparency = 1,
+                    TextTransparency       = 1,
+                }):Play()
+            end)
+        end
+    end
+
+    task.wait(0.5)
+    loadGui:Destroy()
+
+    -- Slide main menu in
+    mainFrame.Visible = true
+    animateIn()
 end)
 
 print("[Senetcha] Loaded")
