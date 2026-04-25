@@ -987,9 +987,7 @@ makeScrollRow("Speed",0.5,25,1.5," r/s",function(v) orbitSpeed=v end,ragePage)
 makeScrollRow("Height",0,60,15," st",function(v) orbitHeight=v end,ragePage)
 makeScrollRow("Radius",1,40,8," st",function(v) orbitRadius=v end,ragePage)
 
-sectionLbl("AUTO KILL  (select from Players tab)", ragePage)
-make("TextLabel",{Text="TPs to target, auto-enables: Rage Aimbot, Triggerbot Always, Auto Reload. Re-acquires after death.",Size=UDim2.new(1,0,0,32),BackgroundTransparency=1,TextColor3=C.textDim,TextSize=10,Font=Enum.Font.Gotham,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left},ragePage)
-makeToggle("Auto Kill",function(on) if on then if autoKillTarget then startAutoKill(autoKillTarget) else toggleStates["Auto Kill"]=false end else stopAutoKill() end end,ragePage)
+sectionLbl("AUTO RELOAD", ragePage)
 makeToggle("Auto Reload",function(on) autoReloadActive=on; if on then startAutoReload() else stopAutoReload() end end,ragePage)
 
 -- =============================================
@@ -1096,39 +1094,84 @@ local function teleportTo(target) if not target.Character then return end; local
 local plRows={}
 local function buildPlayerRow(target)
     if plRows[target] then return end
-    local row=make("Frame",{Size=UDim2.new(1,0,0,46),BackgroundColor3=C.bg2,BorderSizePixel=0},plPage); corner(row,7); make("UIStroke",{Color=C.border,Thickness=1},row)
-    -- Avatar thumbnail
-    local badge=make("Frame",{Size=UDim2.new(0,34,0,34),Position=UDim2.new(0,6,0.5,-17),BackgroundColor3=C.accentDim,BorderSizePixel=0},row); corner(badge,6)
-    -- Use the thumbnail URL format directly — works without async calls
-    local thumbUrl = "https://www.roblox.com/headshot-thumbnail/image?userId="..target.UserId.."&width=48&height=48&format=png"
-    local avatarImg=make("ImageLabel",{
-        Size=UDim2.new(1,0,1,0),
-        BackgroundTransparency=1,
-        Image=thumbUrl,
-    },badge)
-    corner(avatarImg,5)
-    make("TextLabel",{Text=target.Name,Size=UDim2.new(1,-284,1,0),Position=UDim2.new(0,46,0,0),BackgroundTransparency=1,TextColor3=C.text,TextSize=12,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd},row)
-    local function aBtn(label,col,xOff) local b=make("TextButton",{Text=label,Size=UDim2.new(0,52,0,26),Position=UDim2.new(1,xOff,0.5,-13),BackgroundColor3=col,TextColor3=C.textBright,TextSize=10,Font=Enum.Font.GothamBold,BorderSizePixel=0},row); corner(b,5); return b end
-    local orbitBtn=aBtn("Orbit",Color3.fromRGB(75,45,155),-220)
-    local specBtn =aBtn("Spec", Color3.fromRGB(40,95,175),-164)
-    local tpBtn   =aBtn("TP",   Color3.fromRGB(30,125,65),-108)
-    local flBtn   =aBtn("Fling",C.red,                    -52)
-    orbitBtn.Name="OrbitBtn"; specBtn.Name="SpecBtn"
+    -- Two-row layout: top row has avatar+name, bottom has all buttons
+    local row=make("Frame",{Size=UDim2.new(1,0,0,70),BackgroundColor3=C.bg2,BorderSizePixel=0},plPage)
+    corner(row,7); make("UIStroke",{Color=C.border,Thickness=1},row)
+
+    -- Avatar
+    local badge=make("Frame",{Size=UDim2.new(0,34,0,34),Position=UDim2.new(0,6,0,8),BackgroundColor3=C.accentDim,BorderSizePixel=0},row); corner(badge,6)
+    local thumbUrl="https://www.roblox.com/headshot-thumbnail/image?userId="..target.UserId.."&width=48&height=48&format=png"
+    corner(make("ImageLabel",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Image=thumbUrl},badge),5)
+
+    -- Name
+    make("TextLabel",{Text=target.Name,Size=UDim2.new(1,-50,0,34),Position=UDim2.new(0,46,0,8),BackgroundTransparency=1,TextColor3=C.text,TextSize=12,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Center,TextTruncate=Enum.TextTruncate.AtEnd},row)
+
+    -- Button row (6 buttons across the bottom)
+    local function aBtn(label,col,idx)
+        -- evenly spaced across width
+        local btnW=56; local gap=4; local totalW=(btnW*6)+(gap*5); local startX=math.floor((400-totalW)/2)
+        local b=make("TextButton",{Text=label,Size=UDim2.new(0,btnW,0,24),Position=UDim2.new(0,startX+(idx-1)*(btnW+gap),0,40),BackgroundColor3=col,TextColor3=C.textBright,TextSize=9,Font=Enum.Font.GothamBold,BorderSizePixel=0},row); corner(b,5); return b
+    end
+
+    local akBtn    = aBtn("Auto Kill", Color3.fromRGB(180,35,55),   1)
+    local orbitBtn = aBtn("Orbit",     Color3.fromRGB(75,45,155),   2)
+    local specBtn  = aBtn("Spectate",  Color3.fromRGB(40,95,175),   3)
+    local tpBtn    = aBtn("Teleport",  Color3.fromRGB(30,125,65),   4)
+    local flBtn    = aBtn("Fling",     Color3.fromRGB(160,60,20),   5)
+    local copyBtn  = aBtn("Copy Name", Color3.fromRGB(55,50,90),    6)
+
+    akBtn.Name="AKBtn"; orbitBtn.Name="OrbitBtn"; specBtn.Name="SpecBtn"
+
+    -- Auto Kill
+    akBtn.MouseButton1Click:Connect(function()
+        if autoKillActive and autoKillTarget==target then
+            stopAutoKill()
+            akBtn.Text="Auto Kill"; akBtn.BackgroundColor3=Color3.fromRGB(180,35,55)
+            toggleStates["Auto Kill"]=false
+        else
+            autoKillTarget=target
+            startAutoKill(target)
+            akBtn.Text="Stop AK"; akBtn.BackgroundColor3=C.red
+            toggleStates["Auto Kill"]=true
+            -- Reset other AK buttons
+            for p2,r2 in pairs(plRows) do
+                if p2~=target then
+                    local ab=r2:FindFirstChild("AKBtn")
+                    if ab then ab.Text="Auto Kill"; ab.BackgroundColor3=Color3.fromRGB(180,35,55) end
+                end
+            end
+        end
+    end)
+
+    -- Orbit
     orbitBtn.MouseButton1Click:Connect(function()
-        if orbitActive and orbitTarget==target then stopOrbit(); orbitBtn.Text="Orbit"; orbitBtn.BackgroundColor3=Color3.fromRGB(75,45,155); toggleStates["Orbit"]=false
-        else orbitTarget=target; startOrbit(target); orbitBtn.Text="Stop"; orbitBtn.BackgroundColor3=C.red; toggleStates["Orbit"]=true
-            for p2,r2 in pairs(plRows) do if p2~=target then local ob=r2:FindFirstChild("OrbitBtn"); if ob then ob.Text="Orbit"; ob.BackgroundColor3=Color3.fromRGB(75,45,155) end end end end
+        if orbitActive and orbitTarget==target then
+            stopOrbit(); orbitBtn.Text="Orbit"; orbitBtn.BackgroundColor3=Color3.fromRGB(75,45,155)
+        else
+            orbitTarget=target; startOrbit(target)
+            orbitBtn.Text="Stop"; orbitBtn.BackgroundColor3=C.red
+            for p2,r2 in pairs(plRows) do if p2~=target then local ob=r2:FindFirstChild("OrbitBtn"); if ob then ob.Text="Orbit"; ob.BackgroundColor3=Color3.fromRGB(75,45,155) end end end
+        end
     end)
+
+    -- Spectate
     specBtn.MouseButton1Click:Connect(function()
-        if spectating==target then stopSpectate(); specBtn.Text="Spec"; specBtn.BackgroundColor3=Color3.fromRGB(40,95,175)
-        else startSpectate(target); specBtn.Text="Stop"; specBtn.BackgroundColor3=Color3.fromRGB(105,50,14)
-            for p2,r2 in pairs(plRows) do if p2~=target then local sb=r2:FindFirstChild("SpecBtn"); if sb then sb.Text="Spec"; sb.BackgroundColor3=Color3.fromRGB(40,95,175) end end end end
+        if spectating==target then
+            stopSpectate(); specBtn.Text="Spectate"; specBtn.BackgroundColor3=Color3.fromRGB(40,95,175)
+        else
+            startSpectate(target); specBtn.Text="Stop"; specBtn.BackgroundColor3=Color3.fromRGB(105,50,14)
+            for p2,r2 in pairs(plRows) do if p2~=target then local sb=r2:FindFirstChild("SpecBtn"); if sb then sb.Text="Spectate"; sb.BackgroundColor3=Color3.fromRGB(40,95,175) end end end
+        end
     end)
+
     tpBtn.MouseButton1Click:Connect(function() teleportTo(target) end)
-    flBtn.MouseButton1Click:Connect(function()
-        autoKillTarget=target
-        flingPlayer(target)
+    flBtn.MouseButton1Click:Connect(function() flingPlayer(target) end)
+    copyBtn.MouseButton1Click:Connect(function()
+        -- Copy name to clipboard
+        pcall(function() setclipboard(target.Name) end)
+        copyBtn.Text="Copied!"; task.delay(1.5,function() copyBtn.Text="Copy Name" end)
     end)
+
     plRows[target]=row
 end
 
