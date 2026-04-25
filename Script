@@ -285,6 +285,8 @@ local espActive       = false
 local espBoxOn        = true
 local espHealthOn     = true
 local espNameOn       = true
+local espBoneOn       = false
+local espTracerOn     = false
 
 -- Legit aimbot (smooth, FOV-gated, looks human)
 local legitAimActive  = false
@@ -537,6 +539,32 @@ local function worldToScreen(pos)
     local sp,vis=camera:WorldToViewportPoint(pos); return sp.X,sp.Y,vis
 end
 
+-- R15 skeleton connections: {partA, partB}
+local BONE_CONNECTIONS = {
+    {"Head",        "UpperTorso"},
+    {"UpperTorso",  "LowerTorso"},
+    {"LowerTorso",  "LeftUpperLeg"},
+    {"LowerTorso",  "RightUpperLeg"},
+    {"LeftUpperLeg","LeftLowerLeg"},
+    {"RightUpperLeg","RightLowerLeg"},
+    {"LeftLowerLeg","LeftFoot"},
+    {"RightLowerLeg","RightFoot"},
+    {"UpperTorso",  "LeftUpperArm"},
+    {"UpperTorso",  "RightUpperArm"},
+    {"LeftUpperArm","LeftLowerArm"},
+    {"RightUpperArm","RightLowerArm"},
+    {"LeftLowerArm","LeftHand"},
+    {"RightLowerArm","RightHand"},
+}
+-- R6 fallback connections
+local BONE_CONNECTIONS_R6 = {
+    {"Head",   "Torso"},
+    {"Torso",  "Left Arm"},
+    {"Torso",  "Right Arm"},
+    {"Torso",  "Left Leg"},
+    {"Torso",  "Right Leg"},
+}
+
 local function createESP(p)
     if not p.Character or ESP_OBJECTS[p] then return end
     local hrp=p.Character:FindFirstChild("HumanoidRootPart"); if not hrp then return end
@@ -544,15 +572,30 @@ local function createESP(p)
     local hpBg=newLine(4,Color3.fromRGB(25,20,40),4)
     local hpFill=newLine(3,Color3.fromRGB(60,220,90),5)
     local nameTag=newText2(); nameTag.Text=p.Name
-    ESP_OBJECTS[p]={box=box,hpBg=hpBg,hpFill=hpFill,nameTag=nameTag}
+
+    -- Bone lines
+    local isR15 = p.Character:FindFirstChild("UpperTorso") ~= nil
+    local connections = isR15 and BONE_CONNECTIONS or BONE_CONNECTIONS_R6
+    local boneLines = {}
+    for i=1,#connections do
+        boneLines[i] = newLine(1, Color3.fromRGB(255,255,255), 5)
+    end
+
+    -- Tracer line (bottom of screen -> player feet)
+    local tracer = newLine(1, Color3.fromRGB(255,255,255), 4)
+
+    ESP_OBJECTS[p]={box=box,hpBg=hpBg,hpFill=hpFill,nameTag=nameTag,
+                    boneLines=boneLines,boneConns=connections,isR15=isR15,tracer=tracer}
 end
 
 local function removeESP(p)
     local o=ESP_OBJECTS[p]; if not o then return end
     for _,l in ipairs(o.box) do pcall(function() l:Remove() end) end
+    if o.boneLines then for _,l in ipairs(o.boneLines) do pcall(function() l:Remove() end) end end
     pcall(function() o.hpBg:Remove() end)
     pcall(function() o.hpFill:Remove() end)
     pcall(function() o.nameTag:Remove() end)
+    pcall(function() o.tracer:Remove() end)
     ESP_OBJECTS[p]=nil
 end
 
@@ -611,6 +654,53 @@ RunService.RenderStepped:Connect(function()
         o.hpFill.From=hpMid;o.hpFill.To=hpBot;o.hpFill.Visible=hpShow;o.hpFill.Color=hpCol
         o.nameTag.Visible=espNameOn and espActive
         o.nameTag.Position=Vector2.new(cx,top-16); o.nameTag.Color=col
+
+        -- ── Bone ESP ──────────────────────────────────────────────
+        if o.boneLines and espBoneOn and espActive then
+            for i,conn in ipairs(o.boneConns) do
+                local partA = char:FindFirstChild(conn[1])
+                local partB = char:FindFirstChild(conn[2])
+                local bl    = o.boneLines[i]
+                if partA and partB then
+                    local ax,ay,av = worldToScreen(partA.Position)
+                    local bx,by,bv = worldToScreen(partB.Position)
+                    if av and bv then
+                        bl.From    = Vector2.new(ax,ay)
+                        bl.To      = Vector2.new(bx,by)
+                        bl.Color   = col
+                        bl.Visible = true
+                    else
+                        bl.Visible = false
+                    end
+                else
+                    o.boneLines[i].Visible = false
+                end
+            end
+        else
+            if o.boneLines then
+                for _,bl in ipairs(o.boneLines) do bl.Visible=false end
+            end
+        end
+
+        -- ── Tracer ───────────────────────────────────────────────
+        if o.tracer then
+            if espTracerOn and espActive then
+                -- Draw from bottom-centre of screen to the player's feet
+                local vp      = camera.ViewportSize
+                local screenBottom = Vector2.new(vp.X/2, vp.Y)
+                local fx2,fy2,fv2 = worldToScreen(hrp.Position - Vector3.new(0,2.8,0))
+                if fv2 then
+                    o.tracer.From    = screenBottom
+                    o.tracer.To      = Vector2.new(fx2,fy2)
+                    o.tracer.Color   = col
+                    o.tracer.Visible = true
+                else
+                    o.tracer.Visible = false
+                end
+            else
+                o.tracer.Visible = false
+            end
+        end
     end
 end)
 
@@ -861,28 +951,53 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 -- ================================================================
---  SILENT AIM  (polls LMB each frame, no gpe issue)
+--  SILENT AIM
+--  Works by warping the mouse cursor to the target's screen position
+--  at the moment LMB is pressed, so the tool's server raycast hits
+--  the target. The mouse is restored the next frame invisibly.
 -- ================================================================
+local silentOriginalMouse = nil
+
 RunService.RenderStepped:Connect(function()
-    -- Redirect happens first, before target selection logic
     if silentAimActive and silentAimTarget then
-        local lmbDown=UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
-        local justClicked=lmbDown and not silentLmbWasDown
+        local lmbDown = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+        local justClicked = lmbDown and not silentLmbWasDown
+
         if justClicked then
-            local tool=character and character:FindFirstChildOfClass("Tool")
+            local tool = character and character:FindFirstChildOfClass("Tool")
             if tool then
-                local aimPos=getAimPosition(silentAimTarget)
+                local aimPos = getAimPosition(silentAimTarget)
                 if aimPos then
-                    local savedCF=camera.CFrame
-                    camera.CFrame=CFrame.new(savedCF.Position,aimPos)
-                    -- Restore next frame — task.defer runs before next render
-                    task.defer(function() camera.CFrame=savedCF end)
+                    -- Project target bone to screen
+                    local sp, vis = camera:WorldToViewportPoint(aimPos)
+                    if vis then
+                        -- Save current mouse position
+                        silentOriginalMouse = UserInputService:GetMouseLocation()
+                        -- Warp mouse to target screen position
+                        pcall(function()
+                            VIM:SendMouseMoveEvent(sp.X, sp.Y, game)
+                        end)
+                        -- Restore mouse next frame so player never sees it move
+                        task.defer(function()
+                            if silentOriginalMouse then
+                                pcall(function()
+                                    VIM:SendMouseMoveEvent(silentOriginalMouse.X, silentOriginalMouse.Y, game)
+                                end)
+                                silentOriginalMouse = nil
+                            end
+                        end)
+                    end
                 end
             end
         end
-        silentLmbWasDown=lmbDown
+        silentLmbWasDown = lmbDown
     else
-        silentLmbWasDown=false
+        silentLmbWasDown = false
+        -- Restore mouse if we had it warped
+        if silentOriginalMouse then
+            pcall(function() VIM:SendMouseMoveEvent(silentOriginalMouse.X, silentOriginalMouse.Y, game) end)
+            silentOriginalMouse = nil
+        end
     end
 
     -- Target selection
@@ -1052,6 +1167,8 @@ end, charPage)
 makeToggle("ESP  -  Box",        function(on) espBoxOn=on    end, charPage)
 makeToggle("ESP  -  Health Bar", function(on) espHealthOn=on end, charPage)
 makeToggle("ESP  -  Name",       function(on) espNameOn=on   end, charPage)
+makeToggle("ESP  -  Bones",      function(on) espBoneOn=on   end, charPage)
+makeToggle("ESP  -  Tracers",    function(on) espTracerOn=on end, charPage)
 
 sectionLabel("MOVEMENT", charPage)
 makeSlider("Walk Speed",16,300,16,"",function(v) currentSpeed=v end, charPage)
