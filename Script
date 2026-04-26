@@ -121,6 +121,8 @@ local flyActive        = false
 local noclipActive     = false
 local infiniteJump     = false
 local bHop             = false
+local spinActive       = false
+local antiAfkActive    = false
 local bodyVelocity, bodyGyro, flyConn
 
 local legitKeybind  = Enum.UserInputType.MouseButton2; local legitKBL  = "RMB"
@@ -1048,7 +1050,7 @@ end,charPage)
 makeKbRow("Fly Keybind",flyKBL,function(k,l) flyKeybind=k;flyKBL=l end,charPage)
 makeToggle("Noclip",function(on) noclipActive=on end,charPage)
 makeKbRow("Noclip Keybind",noclipKBL,function(k,l) noclipKeybind=k;noclipKBL=l end,charPage)
-makeToggle("Bunny Hop",function(on) bHop=on; if on then task.spawn(function() while bHop do local c=player.Character; local hum=c and c:FindFirstChildOfClass("Humanoid"); if hum and hum.FloorMaterial~=Enum.Material.Air then hum:ChangeState(Enum.HumanoidStateType.Jumping) end; task.wait(0.05) end end) end end,charPage)
+makeToggle("Bunny Hop",function(on) bHop=on end,charPage)
 
 sectionLbl("VISUAL", charPage)
 makeToggle("Fullbright",function(on) local L=game:GetService("Lighting"); L.Brightness=on and 10 or 1; L.Ambient=on and Color3.fromRGB(255,255,255) or Color3.fromRGB(70,70,70); L.OutdoorAmbient=on and Color3.fromRGB(255,255,255) or Color3.fromRGB(127,127,127) end,charPage)
@@ -1061,15 +1063,7 @@ makeToggle("Third Person Unlock",function(on) player.CameraMaxZoomDistance=on an
 sectionLbl("TOOLS", charPage)
 
 
-makeToggle("Spin  (rotate character fast)",function(on)
-    if on then task.spawn(function()
-        while toggleStates["Spin  (rotate character fast)"] do
-            local mHrp=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-            if mHrp then mHrp.CFrame=mHrp.CFrame*CFrame.Angles(0,math.rad(25),0) end
-            task.wait(1/60)
-        end
-    end) end
-end,charPage)
+makeToggle("Spin  (rotate character fast)",function(on) spinActive=on end,charPage)
 
 -- =============================================
 -- BUILD MISC TAB
@@ -1077,7 +1071,7 @@ end,charPage)
 sectionLbl("MENU", miscPage)
 makeKbRow("Open / Close Menu",menuKBL,function(k,l) menuKeybind=k;menuKBL=l end,miscPage)
 sectionLbl("UTILITY", miscPage)
-makeToggle("Anti-AFK",function(on) if on then task.spawn(function() while toggleStates["Anti-AFK"] do task.wait(55); pcall(function() VIM:SendKeyEvent(true,"LeftShift",false,game) end) end end) end end,miscPage)
+makeToggle("Anti-AFK",function(on) antiAfkActive=on end,miscPage)
 makeToggle("Chat Spam (say nothing)",function(on)
     -- Sends empty presses to keep chat alive without spam
 end,miscPage)
@@ -1227,6 +1221,37 @@ local function buildHackRows()
 end
 RunService.Heartbeat:Connect(function() for name,r in pairs(hackRows) do local on=toggleStates[name]==true; r.dot.BackgroundColor3=on and C.on or C.off; r.lbl.TextColor3=on and C.textBright or C.textDim end end)
 task.defer(buildHackRows)
+
+-- =============================================
+-- FEATURE LOOPS  (check their own variable, not toggleStates)
+-- =============================================
+
+-- Bunny hop
+RunService.Heartbeat:Connect(function()
+    if not bHop then return end
+    local c = player.Character
+    local hum = c and c:FindFirstChildOfClass("Humanoid")
+    if hum and hum.FloorMaterial ~= Enum.Material.Air then
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- Spin
+RunService.RenderStepped:Connect(function()
+    if not spinActive then return end
+    local mHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if mHrp then mHrp.CFrame = mHrp.CFrame * CFrame.Angles(0, math.rad(25), 0) end
+end)
+
+-- Anti-AFK
+task.spawn(function()
+    while true do
+        task.wait(55)
+        if antiAfkActive then
+            pcall(function() VIM:SendKeyEvent(true, "LeftShift", false, game) end)
+        end
+    end
+end)
 
 -- =============================================
 -- RUNTIME LOOPS
