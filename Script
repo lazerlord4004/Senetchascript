@@ -96,6 +96,7 @@ local screenGui = new("ScreenGui", player.PlayerGui, {
     Name="Senetcha", ResetOnSpawn=false,
     ZIndexBehavior=Enum.ZIndexBehavior.Sibling,
     IgnoreGuiInset=true,
+    DisplayOrder=999,
 })
 
 local mainFrame = new("Frame", screenGui, {
@@ -169,7 +170,11 @@ local charPage=tabPages["Character"]; local miscPage=tabPages["Misc"]; local plP
 
 -- minimise / close
 local minimised=false
-closeBtn.MouseButton1Click:Connect(function() mainFrame.Visible=false end)
+closeBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible=false
+    UserInputService.MouseBehavior=Enum.MouseBehavior.Default
+    UserInputService.MouseIconEnabled=true
+end)
 minBtn.MouseButton1Click:Connect(function()
     minimised=not minimised
     minBtn.Text=minimised and "+" or "-"
@@ -1003,7 +1008,13 @@ UserInputService.JumpRequest:Connect(function()
 end)
 UserInputService.InputBegan:Connect(function(inp,gpe)
     if listeningForKey then return end; if gpe then return end
-    if inp.KeyCode==menuKB then mainFrame.Visible=not mainFrame.Visible end
+    if inp.KeyCode==menuKB then
+        mainFrame.Visible=not mainFrame.Visible
+        if mainFrame.Visible then
+            UserInputService.MouseBehavior=Enum.MouseBehavior.Default
+            UserInputService.MouseIconEnabled=true
+        end
+    end
 end)
 
 -- ============================================================
@@ -1037,6 +1048,9 @@ task.spawn(function()
     end
     mainFrame.Position=pos
     mainFrame.BackgroundTransparency=0
+    -- Free mouse when menu first opens
+    UserInputService.MouseBehavior=Enum.MouseBehavior.Default
+    UserInputService.MouseIconEnabled=true
 end)
 
 print("[Senetcha] Loaded")
