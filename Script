@@ -55,12 +55,9 @@ local function stroke(p,c,t) new("UIStroke",p,{Color=c or C.border,Thickness=t o
 local legitOn=false; local legitSticky=false; local legitLocked=false; local legitTarget=nil; local legitHeld=false
 local rageOn=false;  local rageSticky=false;  local rageLocked=false;  local rageTarget=nil;  local rageHeld=false
 -- silent aim
-local silentOn=false; local silentSticky=false; local silentLocked=false; local silentTarget=nil; local silentHeld=false
-local silentMouse=player:GetMouse()
-local SILENT_PRED=0.18
 -- triggerbot
 local trigOn=false; local trigSticky=false; local trigLocked=false; local trigAlways=false; local trigHeld=false
-local TRIG_PRESS=0.06; local TRIG_REL=0.05; local lastShot=0; local lastRel=0; local trigPressed=false
+local TRIG_PRESS=0.06; local TRIG_REL=0.05; local TRIG_DIST=50; local lastShot=0; local lastRel=0; local trigPressed=false
 -- orbit
 local orbitOn=false; local orbitTarget=nil; local orbitAngle=0
 local orbitSpeed=1.5; local orbitHeight=15; local orbitRadius=8
@@ -69,7 +66,7 @@ local orbitBV=nil; local orbitBG=nil
 local akOn=false; local akTarget=nil; local akConn=nil
 local arOn=false; local arConn=nil
 -- ESP
-local espOn=false; local espBox=true; local espHP=true; local espName=true; local espBone=false; local espTracer=false
+local espOn=false; local espBox=true; local espHP=true; local espName=true; local espBone=false; local espTracer=false; local espTeamCheck=false; local espMaxDist=500
 local tracerOrigin="Bottom"
 local ESP={}
 -- movement
@@ -80,7 +77,6 @@ local noclipOn=false; local infJump=false; local bhopOn=false; local spinOn=fals
 local aimBone="Head"; local LEGIT_FOV=120; local LEGIT_SMOOTH=0.12
 -- keybinds
 local legitKB=Enum.UserInputType.MouseButton2; local legitKBL="RMB"
-local silentKB=Enum.KeyCode.Q;                 local silentKBL="Q"
 local trigKB=Enum.KeyCode.T;                   local trigKBL="T"
 local rageKB=Enum.UserInputType.MouseButton2;  local rageKBL="RMB"
 local menuKB=Enum.KeyCode.Insert;              local menuKBL="Insert"
@@ -484,9 +480,15 @@ end
 local BONE_R15={{"Head","UpperTorso"},{"UpperTorso","LowerTorso"},{"LowerTorso","LeftUpperLeg"},{"LowerTorso","RightUpperLeg"},{"LeftUpperLeg","LeftLowerLeg"},{"RightUpperLeg","RightLowerLeg"},{"LeftLowerLeg","LeftFoot"},{"RightLowerLeg","RightFoot"},{"UpperTorso","LeftUpperArm"},{"UpperTorso","RightUpperArm"},{"LeftUpperArm","LeftLowerArm"},{"RightUpperArm","RightLowerArm"},{"LeftLowerArm","LeftHand"},{"RightLowerArm","RightHand"}}
 local BONE_R6={{"Head","Torso"},{"Torso","Left Arm"},{"Torso","Right Arm"},{"Torso","Left Leg"},{"Torso","Right Leg"}}
 local function wts(p) local s,v=camera:WorldToViewportPoint(p); return s.X,s.Y,v end
-local function getCol(p) return ((legitOn and legitTarget==p) or (rageOn and rageTarget==p) or (silentOn and silentTarget==p)) and Color3.fromRGB(220,40,40) or Color3.fromRGB(255,255,255) end
+local function getCol(p) return ((legitOn and legitTarget==p) or (rageOn and rageTarget==p)) and Color3.fromRGB(220,40,40) or Color3.fromRGB(255,255,255) end
 local function newLine(thick,col,zi) local l=Drawing.new("Line"); l.Visible=false; l.Color=col or Color3.new(1,1,1); l.Thickness=thick or 1.5; l.Transparency=1; l.ZIndex=zi or 5; return l end
 local function newTxt() local t=Drawing.new("Text"); t.Visible=false; t.Color=Color3.new(1,1,1); t.Size=13; t.Font=Drawing.Fonts.Monospace; t.Outline=true; t.OutlineColor=Color3.new(0,0,0); t.Center=true; t.ZIndex=6; return t end
+
+local function isEnemy(p)
+    if not espTeamCheck then return true end -- team check off = show everyone
+    if not p.Team or not player.Team then return true end -- no teams = show everyone
+    return p.Team ~= player.Team
+end
 
 local function addESP(p)
     if not p.Character or ESP[p] then return end
@@ -514,6 +516,11 @@ RunService.RenderStepped:Connect(function()
         local alive=hrp~=nil and hum~=nil and hum.Health>0
         local function hide() for _,l in ipairs(o.box) do l.Visible=false end; for _,l in ipairs(o.bones) do l.Visible=false end; o.hpBg.Visible=false; o.hpFill.Visible=false; o.name.Visible=false; o.tracer.Visible=false end
         if not alive then hide(); continue end
+        -- Team check
+        if not isEnemy(p) then hide(); continue end
+        -- Distance check
+        local myHrp2=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if myHrp2 and (hrp.Position-myHrp2.Position).Magnitude > espMaxDist then hide(); continue end
         local head=char:FindFirstChild("Head")
         local hPos=(head and head.Position or hrp.Position)+Vector3.new(0,1.9,0)
         local fPos=hrp.Position-Vector3.new(0,3,0)
@@ -523,23 +530,23 @@ RunService.RenderStepped:Connect(function()
         local top=math.min(hy,fy); local bot=math.max(hy,fy)
         local lft=cx-bW*0.5; local rgt=cx+bW*0.5; local col=getCol(p)
         local tl,tr,bl,br=Vector2.new(lft,top),Vector2.new(rgt,top),Vector2.new(lft,bot),Vector2.new(rgt,bot)
-        local show=espBox and espOn
+        local show=espBox
         o.box[1].From=tl;o.box[1].To=tr;o.box[1].Color=col;o.box[1].Visible=show
         o.box[2].From=bl;o.box[2].To=br;o.box[2].Color=col;o.box[2].Visible=show
         o.box[3].From=tl;o.box[3].To=bl;o.box[3].Color=col;o.box[3].Visible=show
         o.box[4].From=tr;o.box[4].To=br;o.box[4].Color=col;o.box[4].Visible=show
-        local hpShow=espHP and espOn; local ratio=math.clamp(hum.Health/math.max(1,hum.MaxHealth),0,1)
+        local hpShow=espHP; local ratio=math.clamp(hum.Health/math.max(1,hum.MaxHealth),0,1)
         local hpX=lft-5; local hpCol=Color3.fromRGB(math.floor(220*(1-ratio)),math.floor(220*ratio),40)
         o.hpBg.From=Vector2.new(hpX,top);o.hpBg.To=Vector2.new(hpX,bot);o.hpBg.Visible=hpShow
         o.hpFill.From=Vector2.new(hpX,top+bH*(1-ratio));o.hpFill.To=Vector2.new(hpX,bot);o.hpFill.Visible=hpShow;o.hpFill.Color=hpCol
-        o.name.Visible=espName and espOn; o.name.Position=Vector2.new(cx,top-16); o.name.Color=col
-        if espBone and espOn then
+        o.name.Visible=espName; o.name.Position=Vector2.new(cx,top-16); o.name.Color=col
+        if espBone then
             for i,conn in ipairs(o.conns) do
                 local pA=char:FindFirstChild(conn[1]); local pB=char:FindFirstChild(conn[2]); local bl2=o.bones[i]
                 if pA and pB then local ax,ay,av=wts(pA.Position); local bx2,by2,bv=wts(pB.Position); if av and bv then bl2.From=Vector2.new(ax,ay);bl2.To=Vector2.new(bx2,by2);bl2.Color=col;bl2.Visible=true else bl2.Visible=false end else bl2.Visible=false end
             end
         else for _,bl2 in ipairs(o.bones) do bl2.Visible=false end end
-        if espTracer and espOn then
+        if espTracer then
             local vp=camera.ViewportSize; local oy=tracerOrigin=="Top" and 0 or tracerOrigin=="Middle" and vp.Y/2 or vp.Y
             local tx,ty,tv=wts(hrp.Position-Vector3.new(0,2.8,0))
             if tv then o.tracer.From=Vector2.new(vp.X/2,oy);o.tracer.To=Vector2.new(tx,ty);o.tracer.Visible=true else o.tracer.Visible=false end
@@ -551,7 +558,6 @@ Players.PlayerRemoving:Connect(function(p)
     remESP(p)
     if legitTarget==p then legitTarget=nil;legitLocked=false end
     if rageTarget==p  then rageTarget=nil;rageLocked=false end
-    if silentTarget==p then silentTarget=nil;silentLocked=false end
 end)
 for _,p in pairs(Players:GetPlayers()) do if p~=player then p.CharacterAdded:Connect(function() task.wait(1); if espOn then remESP(p);addESP(p) end end) end end
 
@@ -623,101 +629,6 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ============================================================
--- SILENT AIM
--- ============================================================
--- ============================================================
--- SILENT AIM
--- The hook is kept dead simple — just reads silentTarget which
--- the RenderStepped loop below keeps updated every frame.
--- No target search inside the hook (too slow, can error).
--- ============================================================
-local function getSilentPart()
-    if not silentTarget or not silentTarget.Character then return nil end
-    local char = silentTarget.Character
-    if aimBone == "Head" then
-        return char:FindFirstChild("Head")
-            or char:FindFirstChild("HumanoidRootPart")
-    else
-        return char:FindFirstChild("UpperTorso")
-            or char:FindFirstChild("Torso")
-            or char:FindFirstChild("HumanoidRootPart")
-    end
-end
-
--- Try hookmetamethod first (Synapse X, KRNL, etc.)
-local hookedOk = pcall(function()
-    local orig
-    orig = hookmetamethod(game, "__index", newcclosure(function(self, key)
-        if silentOn and silentTarget then
-            if typeof(self) == "Instance" and self:IsA("Mouse") then
-                if key == "Hit" or key == "Target" then
-                    local part = getSilentPart()
-                    if part then
-                        local hit = part.CFrame + (part.Velocity * Vector3.new(1,0.1,1) * SILENT_PRED)
-                        return key == "Hit" and hit or part
-                    end
-                end
-            end
-        end
-        return orig(self, key)
-    end))
-end)
-
--- Fallback: getrawmetatable (Script-Ware, Fluxus, etc.)
-if not hookedOk then
-    pcall(function()
-        local mt  = getrawmetatable(game)
-        local ro  = pcall(setreadonly, mt, false) -- some executors use makewriteable
-        if not ro then pcall(makewriteable, mt) end
-        local oi  = mt.__index
-        mt.__index = newcclosure(function(self, key)
-            if silentOn and silentTarget then
-                if self == silentMouse and (key == "Hit" or key == "Target") then
-                    local part = getSilentPart()
-                    if part then
-                        local hit = part.CFrame + (part.Velocity * Vector3.new(1,0.1,1) * SILENT_PRED)
-                        return key == "Hit" and hit or part
-                    end
-                end
-            end
-            return oi(self, key)
-        end)
-        pcall(setreadonly, mt, true)
-    end)
-end
-
-RunService.RenderStepped:Connect(function()
-    if not silentOn then
-        silentTarget=nil; silentHeld=false; silentLocked=false; return
-    end
-    local h = held(silentKB)
-    local jp = h and not silentHeld
-    if silentSticky then
-        -- Toggle: press once to lock target, press again to unlock
-        if jp then
-            if silentLocked then
-                silentLocked=false; silentTarget=nil
-            else
-                silentTarget=nearest(LEGIT_FOV)
-                silentLocked=silentTarget~=nil
-            end
-        end
-        -- Drop dead targets
-        if silentLocked and not isAlive(silentTarget) then
-            silentTarget=nil; silentLocked=false
-        end
-    else
-        -- Hold: update target every frame while key held
-        if h then
-            silentTarget = nearest(LEGIT_FOV)
-        else
-            silentTarget = nil
-        end
-    end
-    silentHeld = h
-end)
-
--- ============================================================
 -- TRIGGERBOT
 -- ============================================================
 RunService.Heartbeat:Connect(function()
@@ -738,6 +649,10 @@ RunService.Heartbeat:Connect(function()
     local hc=res.Instance:FindFirstAncestorOfClass("Model"); if not hc then return end
     local hp=Players:GetPlayerFromCharacter(hc); if not hp or hp==player then return end
     local hum=hc:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
+    -- Distance check
+    local hrp2=hc:FindFirstChild("HumanoidRootPart"); if not hrp2 then return end
+    local myHrp=player.Character and player.Character:FindFirstChild("HumanoidRootPart"); if not myHrp then return end
+    if (hrp2.Position-myHrp.Position).Magnitude > TRIG_DIST then return end
     pcall(function() VIM:SendMouseButtonEvent(mp.X,mp.Y,0,true,game,1) end); trigPressed=true; lastShot=now
     task.delay(TRIG_REL,function() local mp2=UserInputService:GetMouseLocation(); pcall(function() VIM:SendMouseButtonEvent(mp2.X,mp2.Y,0,false,game,1) end); trigPressed=false; lastRel=tick() end)
 end)
@@ -838,14 +753,13 @@ makeSlider("Smoothness",1,20,8,"",function(v) LEGIT_SMOOTH=v/100 end,aimPage)
 makeSlider("FOV Size",20,500,120,"px",function(v) LEGIT_FOV=v;fovCircle.Radius=v end,aimPage)
 makeToggle("Show FOV Circle",false,function(on) fovCircle.Visible=on end,aimPage)
 
-sectionLbl("SILENT AIM",aimPage)
-makeCombatRow("Silent Aim",silentKBL,function(on) silentOn=on; if not on then silentTarget=nil;silentLocked=false end end,function(k,l) silentKB=k;silentKBL=l end,function(tog) silentSticky=tog;silentTarget=nil;silentLocked=false end,aimPage)
-makeSlider("Prediction",0,40,18,"ms",function(v) SILENT_PRED=v/100 end,aimPage)
+
 
 sectionLbl("TRIGGERBOT",aimPage)
 makeCombatRow("Triggerbot",trigKBL,function(on) trigOn=on; if not on then trigLocked=false;trigAlways=false end end,function(k,l) trigKB=k;trigKBL=l end,function(tog) trigSticky=tog;trigLocked=false end,aimPage)
 makeSlider("Press Delay",5,200,60,"ms",function(v) TRIG_PRESS=v/1000 end,aimPage)
 makeSlider("Release Delay",5,200,50,"ms",function(v) TRIG_REL=v/1000 end,aimPage)
+makeSlider("Max Distance",10,500,50,"st",function(v) TRIG_DIST=v end,aimPage)
 makeToggle("Triggerbot Always Fire",false,function(on) trigAlways=on; if on then trigOn=true end end,aimPage)
 makeToggle("God Mode (Local)",false,function(on) local c=player.Character; local hum=c and c:FindFirstChildOfClass("Humanoid"); if hum then hum.MaxHealth=on and math.huge or 100;hum.Health=hum.MaxHealth end end,aimPage)
 
@@ -869,11 +783,16 @@ makeToggle("Auto Reload",false,function(on) arOn=on; if on then startAR() else s
 -- ============================================================
 sectionLbl("ESP",charPage)
 makeToggle("ESP - Enable",false,function(on) espOn=on; if on then enableESP() else disableESP() end end,charPage)
-makeToggle("ESP - Box",true,function(on) espBox=on end,charPage)
-makeToggle("ESP - Health Bar",true,function(on) espHP=on end,charPage)
-makeToggle("ESP - Name",true,function(on) espName=on end,charPage)
-makeToggle("ESP - Bones",false,function(on) espBone=on end,charPage)
-makeToggle("ESP - Tracers",false,function(on) espTracer=on end,charPage)
+makeToggle("ESP - Box",true,function(on) espBox=on; if on and not espOn then espOn=true; enableESP() end end,charPage)
+makeToggle("ESP - Health Bar",true,function(on) espHP=on; if on and not espOn then espOn=true; enableESP() end end,charPage)
+makeToggle("ESP - Name",true,function(on) espName=on; if on and not espOn then espOn=true; enableESP() end end,charPage)
+makeToggle("ESP - Bones",false,function(on) espBone=on; if on and not espOn then espOn=true; enableESP() end end,charPage)
+makeToggle("ESP - Tracers",false,function(on) espTracer=on; if on and not espOn then espOn=true; enableESP() end end,charPage)
+makeToggle("ESP - Team Check (enemies only)",false,function(on)
+    espTeamCheck=on
+    if espOn then disableESP(); enableESP() end
+end,charPage)
+makeSlider("ESP Max Distance",50,2000,500,"st",function(v) espMaxDist=v end,charPage)
 do
     local tr=new("Frame",charPage,{Size=UDim2.new(1,0,0,28),BackgroundTransparency=1})
     new("UIListLayout",tr,{FillDirection=Enum.FillDirection.Horizontal,Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder})
