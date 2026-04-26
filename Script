@@ -66,7 +66,7 @@ local orbitBV=nil; local orbitBG=nil
 local akOn=false; local akTarget=nil; local akConn=nil
 local arOn=false; local arConn=nil
 -- ESP
-local espOn=false; local espBox=true; local espHP=true; local espName=true; local espBone=false; local espTracer=false; local espTeamCheck=false; local espMaxDist=500
+local espOn=false; local espBox=true; local espHP=true; local espName=true; local espBone=false; local espTracer=false; local espTeamCheck=false; local espMaxDist=500; local espDist=false
 local tracerOrigin="Bottom"
 local ESP={}
 -- movement
@@ -496,7 +496,8 @@ local function addESP(p)
     local isR15=p.Character:FindFirstChild("UpperTorso")~=nil
     local conns=isR15 and BONE_R15 or BONE_R6
     local bones={}; for i=1,#conns do bones[i]=newLine(1) end
-    ESP[p]={box={newLine(1.5),newLine(1.5),newLine(1.5),newLine(1.5)},hpBg=newLine(4,Color3.fromRGB(20,16,36),4),hpFill=newLine(3,Color3.fromRGB(60,220,90),5),name=newTxt(),tracer=newLine(1,Color3.new(1,1,1),4),bones=bones,conns=conns}
+    local distTxt = newTxt(); distTxt.Size=11
+    ESP[p]={box={newLine(1.5),newLine(1.5),newLine(1.5),newLine(1.5)},hpBg=newLine(4,Color3.fromRGB(20,16,36),4),hpFill=newLine(3,Color3.fromRGB(60,220,90),5),name=newTxt(),dist=distTxt,tracer=newLine(1,Color3.new(1,1,1),4),bones=bones,conns=conns}
     ESP[p].name.Text=p.Name
 end
 local function remESP(p)
@@ -504,7 +505,7 @@ local function remESP(p)
     for _,l in ipairs(o.box) do pcall(function() l:Remove() end) end
     for _,l in ipairs(o.bones) do pcall(function() l:Remove() end) end
     pcall(function() o.hpBg:Remove() end); pcall(function() o.hpFill:Remove() end)
-    pcall(function() o.name:Remove() end); pcall(function() o.tracer:Remove() end)
+    pcall(function() o.name:Remove() end); pcall(function() o.dist:Remove() end); pcall(function() o.tracer:Remove() end)
     ESP[p]=nil
 end
 local function enableESP() for _,p in pairs(Players:GetPlayers()) do if p~=player then addESP(p) end end end
@@ -514,7 +515,7 @@ RunService.RenderStepped:Connect(function()
     for p,o in pairs(ESP) do
         local char=p.Character; local hrp=char and char:FindFirstChild("HumanoidRootPart"); local hum=char and char:FindFirstChildOfClass("Humanoid")
         local alive=hrp~=nil and hum~=nil and hum.Health>0
-        local function hide() for _,l in ipairs(o.box) do l.Visible=false end; for _,l in ipairs(o.bones) do l.Visible=false end; o.hpBg.Visible=false; o.hpFill.Visible=false; o.name.Visible=false; o.tracer.Visible=false end
+        local function hide() for _,l in ipairs(o.box) do l.Visible=false end; for _,l in ipairs(o.bones) do l.Visible=false end; o.hpBg.Visible=false; o.hpFill.Visible=false; o.name.Visible=false; if o.dist then o.dist.Visible=false end; o.tracer.Visible=false end
         if not alive then hide(); continue end
         -- Team check
         if not isEnemy(p) then hide(); continue end
@@ -540,6 +541,19 @@ RunService.RenderStepped:Connect(function()
         o.hpBg.From=Vector2.new(hpX,top);o.hpBg.To=Vector2.new(hpX,bot);o.hpBg.Visible=hpShow
         o.hpFill.From=Vector2.new(hpX,top+bH*(1-ratio));o.hpFill.To=Vector2.new(hpX,bot);o.hpFill.Visible=hpShow;o.hpFill.Color=hpCol
         o.name.Visible=espName; o.name.Position=Vector2.new(cx,top-16); o.name.Color=col
+        -- Distance display
+        if o.dist then
+            if espDist then
+                local myHrp3=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                local studs=myHrp3 and math.floor((hrp.Position-myHrp3.Position).Magnitude) or 0
+                o.dist.Text=studs.."st"
+                o.dist.Position=Vector2.new(cx, top-28)
+                o.dist.Color=col
+                o.dist.Visible=true
+            else
+                o.dist.Visible=false
+            end
+        end
         if espBone then
             for i,conn in ipairs(o.conns) do
                 local pA=char:FindFirstChild(conn[1]); local pB=char:FindFirstChild(conn[2]); local bl2=o.bones[i]
@@ -759,7 +773,7 @@ sectionLbl("TRIGGERBOT",aimPage)
 makeCombatRow("Triggerbot",trigKBL,function(on) trigOn=on; if not on then trigLocked=false;trigAlways=false end end,function(k,l) trigKB=k;trigKBL=l end,function(tog) trigSticky=tog;trigLocked=false end,aimPage)
 makeSlider("Press Delay",5,200,60,"ms",function(v) TRIG_PRESS=v/1000 end,aimPage)
 makeSlider("Release Delay",5,200,50,"ms",function(v) TRIG_REL=v/1000 end,aimPage)
-makeSlider("Max Distance",10,500,50,"st",function(v) TRIG_DIST=v end,aimPage)
+makeSlider("Trigger Distance",10,500,50,"st",function(v) TRIG_DIST=v end,aimPage)
 makeToggle("Triggerbot Always Fire",false,function(on) trigAlways=on; if on then trigOn=true end end,aimPage)
 makeToggle("God Mode (Local)",false,function(on) local c=player.Character; local hum=c and c:FindFirstChildOfClass("Humanoid"); if hum then hum.MaxHealth=on and math.huge or 100;hum.Health=hum.MaxHealth end end,aimPage)
 
@@ -786,6 +800,7 @@ makeToggle("ESP - Enable",false,function(on) espOn=on; if on then enableESP() el
 makeToggle("ESP - Box",true,function(on) espBox=on; if on and not espOn then espOn=true; enableESP() end end,charPage)
 makeToggle("ESP - Health Bar",true,function(on) espHP=on; if on and not espOn then espOn=true; enableESP() end end,charPage)
 makeToggle("ESP - Name",true,function(on) espName=on; if on and not espOn then espOn=true; enableESP() end end,charPage)
+makeToggle("ESP - Distance",false,function(on) espDist=on; if on and not espOn then espOn=true; enableESP() end end,charPage)
 makeToggle("ESP - Bones",false,function(on) espBone=on; if on and not espOn then espOn=true; enableESP() end end,charPage)
 makeToggle("ESP - Tracers",false,function(on) espTracer=on; if on and not espOn then espOn=true; enableESP() end end,charPage)
 makeToggle("ESP - Team Check (enemies only)",false,function(on)
