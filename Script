@@ -139,9 +139,10 @@ local contentArea = new("Frame",mainFrame,{Size=UDim2.new(1,0,1,-78),Position=UD
 
 for i,name in ipairs(TAB_NAMES) do
     local sf = new("ScrollingFrame",contentArea,{
-        Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, BorderSizePixel=0,
+        Size=UDim2.new(0,0,0,0), BackgroundTransparency=1, BorderSizePixel=0,
         ScrollBarThickness=3, ScrollBarImageColor3=C.accent,
         CanvasSize=UDim2.new(0,0,0,0), AutomaticCanvasSize=Enum.AutomaticSize.Y,
+        ScrollingEnabled=true,
         Visible=false,
     })
     new("UIListLayout",sf,{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder})
@@ -154,9 +155,12 @@ end
 
 local function switchTab(name)
     for _,n in ipairs(TAB_NAMES) do
-        tabPages[n].Visible=(n==name)
-        tabBtns[n].BackgroundColor3=(n==name) and C.accent or C.bg3
-        tabBtns[n].TextColor3=(n==name) and C.textBright or C.textDim
+        local active = (n==name)
+        tabPages[n].Visible = active
+        -- Zero size when hidden = zero hit area, cannot intercept any clicks
+        tabPages[n].Size = active and UDim2.new(1,0,1,0) or UDim2.new(0,0,0,0)
+        tabBtns[n].BackgroundColor3 = active and C.accent or C.bg3
+        tabBtns[n].TextColor3 = active and C.textBright or C.textDim
     end
 end
 for _,name in ipairs(TAB_NAMES) do
