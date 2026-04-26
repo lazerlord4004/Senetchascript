@@ -614,92 +614,96 @@ end)
 -- ============================================================
 -- SILENT AIM
 -- ============================================================
--- Silent aim using hookmetamethod (more reliable than getrawmetatable on most executors)
-local function installSilent()
-    local ok = pcall(function()
-        local __index
-        __index = hookmetamethod(game, "__index", function(t, k)
-            if t:IsA("Mouse") and (k=="Hit" or k=="Target") and silentOn then
-                -- find nearest in FOV
-                local closest, cd = nil, LEGIT_FOV
-                for _,p in ipairs(Players:GetPlayers()) do
-                    if p~=player and p.Character then
-                        local pn = aimBone=="Head" and "Head" or "HumanoidRootPart"
-                        local part = p.Character:FindFirstChild(pn)
-                        if part then
-                            local pos, onScreen = camera:WorldToScreenPoint(part.Position)
-                            if onScreen then
-                                local dist = (Vector2.new(pos.X,pos.Y) - Vector2.new(t.X,t.Y)).Magnitude
-                                if dist < cd then cd=dist; closest=p end
-                            end
-                        end
-                    end
-                end
-                local target = (silentSticky and silentLocked and silentTarget) or closest
-                if target and target.Character then
-                    local pn = aimBone=="Head" and "Head" or "HumanoidRootPart"
-                    local part = target.Character:FindFirstChild(pn)
-                           or target.Character:FindFirstChild("UpperTorso")
-                           or target.Character:FindFirstChild("HumanoidRootPart")
+-- ============================================================
+-- SILENT AIM
+-- The hook is kept dead simple — just reads silentTarget which
+-- the RenderStepped loop below keeps updated every frame.
+-- No target search inside the hook (too slow, can error).
+-- ============================================================
+local function getSilentPart()
+    if not silentTarget or not silentTarget.Character then return nil end
+    local char = silentTarget.Character
+    if aimBone == "Head" then
+        return char:FindFirstChild("Head")
+            or char:FindFirstChild("HumanoidRootPart")
+    else
+        return char:FindFirstChild("UpperTorso")
+            or char:FindFirstChild("Torso")
+            or char:FindFirstChild("HumanoidRootPart")
+    end
+end
+
+-- Try hookmetamethod first (Synapse X, KRNL, etc.)
+local hookedOk = pcall(function()
+    local orig
+    orig = hookmetamethod(game, "__index", newcclosure(function(self, key)
+        if silentOn and silentTarget then
+            if typeof(self) == "Instance" and self:IsA("Mouse") then
+                if key == "Hit" or key == "Target" then
+                    local part = getSilentPart()
                     if part then
-                        -- Apply prediction (velocity * pred, reduce Y like reference)
                         local hit = part.CFrame + (part.Velocity * Vector3.new(1,0.1,1) * SILENT_PRED)
-                        return k=="Hit" and hit or part
+                        return key == "Hit" and hit or part
                     end
                 end
             end
-            return __index(t, k)
-        end)
-    end)
-    -- Fallback: getrawmetatable if hookmetamethod not available
-    if not ok then
-        pcall(function()
-            local mt=getrawmetatable(game); setreadonly(mt,false)
-            local oi=mt.__index
-            mt.__index=newcclosure(function(self,key)
-                if self==silentMouse and (key=="Hit" or key=="Target") and silentOn then
-                    local closest,cd=nil,LEGIT_FOV
-                    for _,p in ipairs(Players:GetPlayers()) do
-                        if p~=player and p.Character then
-                            local pn=aimBone=="Head" and "Head" or "HumanoidRootPart"
-                            local part=p.Character:FindFirstChild(pn)
-                            if part then
-                                local pos,onScreen=camera:WorldToScreenPoint(part.Position)
-                                if onScreen then
-                                    local dist=(Vector2.new(pos.X,pos.Y)-Vector2.new(silentMouse.X,silentMouse.Y)).Magnitude
-                                    if dist<cd then cd=dist;closest=p end
-                                end
-                            end
-                        end
-                    end
-                    local target=(silentSticky and silentLocked and silentTarget) or closest
-                    if target and target.Character then
-                        local pn=aimBone=="Head" and "Head" or "HumanoidRootPart"
-                        local part=target.Character:FindFirstChild(pn) or target.Character:FindFirstChild("UpperTorso") or target.Character:FindFirstChild("HumanoidRootPart")
-                        if part then
-                            local hit=part.CFrame+(part.Velocity*Vector3.new(1,0.1,1)*SILENT_PRED)
-                            return key=="Hit" and hit or part
-                        end
+        end
+        return orig(self, key)
+    end))
+end)
+
+-- Fallback: getrawmetatable (Script-Ware, Fluxus, etc.)
+if not hookedOk then
+    pcall(function()
+        local mt  = getrawmetatable(game)
+        local ro  = pcall(setreadonly, mt, false) -- some executors use makewriteable
+        if not ro then pcall(makewriteable, mt) end
+        local oi  = mt.__index
+        mt.__index = newcclosure(function(self, key)
+            if silentOn and silentTarget then
+                if self == silentMouse and (key == "Hit" or key == "Target") then
+                    local part = getSilentPart()
+                    if part then
+                        local hit = part.CFrame + (part.Velocity * Vector3.new(1,0.1,1) * SILENT_PRED)
+                        return key == "Hit" and hit or part
                     end
                 end
-                return oi(self,key)
-            end)
-            setreadonly(mt,true)
+            end
+            return oi(self, key)
         end)
-    end
+        pcall(setreadonly, mt, true)
+    end)
 end
-installSilent()
 
 RunService.RenderStepped:Connect(function()
-    if not silentOn then if silentTarget then silentTarget=nil end; silentHeld=false;silentLocked=false; return end
-    local h=held(silentKB); local jp=h and not silentHeld
-    if silentSticky then
-        if jp then if silentLocked then silentLocked=false;silentTarget=nil else silentTarget=nearest(LEGIT_FOV);silentLocked=silentTarget~=nil end end
-        if silentLocked and not isAlive(silentTarget) then silentTarget=nil;silentLocked=false end
-    else
-        if h then local t=nearest(LEGIT_FOV); silentTarget=t else silentTarget=nil end
+    if not silentOn then
+        silentTarget=nil; silentHeld=false; silentLocked=false; return
     end
-    silentHeld=h
+    local h = held(silentKB)
+    local jp = h and not silentHeld
+    if silentSticky then
+        -- Toggle: press once to lock target, press again to unlock
+        if jp then
+            if silentLocked then
+                silentLocked=false; silentTarget=nil
+            else
+                silentTarget=nearest(LEGIT_FOV)
+                silentLocked=silentTarget~=nil
+            end
+        end
+        -- Drop dead targets
+        if silentLocked and not isAlive(silentTarget) then
+            silentTarget=nil; silentLocked=false
+        end
+    else
+        -- Hold: update target every frame while key held
+        if h then
+            silentTarget = nearest(LEGIT_FOV)
+        else
+            silentTarget = nil
+        end
+    end
+    silentHeld = h
 end)
 
 -- ============================================================
