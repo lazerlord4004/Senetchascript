@@ -249,121 +249,130 @@ end
 local function makeToggle(label, startVal, onChange, page)
     local on = startVal or false
 
-    -- Container frame (not interactive itself)
-    local wrap = Instance.new("Frame")
-    wrap.Size             = UDim2.new(1,0,0,32)
-    wrap.BackgroundColor3 = on and C.bg3 or C.bg2
-    wrap.BorderSizePixel  = 0
-    wrap.Parent           = page
-    do local u=Instance.new("UICorner"); u.CornerRadius=UDim.new(0,7); u.Parent=wrap end
-    local rs=Instance.new("UIStroke"); rs.Color=on and C.borderOn or C.border; rs.Thickness=1; rs.Parent=wrap
+    -- The button IS the row. Everything else is a child label/frame.
+    -- No wrapper frame, no ZIndex games — just one TextButton.
+    local btn = Instance.new("TextButton")
+    btn.Name             = "Toggle_"..label
+    btn.Size             = UDim2.new(1, 0, 0, 32)
+    btn.BackgroundColor3 = on and C.bg3 or C.bg2
+    btn.BorderSizePixel  = 0
+    btn.Text             = ""
+    btn.Font             = Enum.Font.Gotham
+    btn.Parent           = page
+    do local u = Instance.new("UICorner"); u.CornerRadius = UDim.new(0,7); u.Parent = btn end
+    local rs = Instance.new("UIStroke"); rs.Color = on and C.borderOn or C.border; rs.Thickness = 1; rs.Parent = btn
 
-    -- Invisible button covering the WHOLE row — no children that could block it
-    local btn=Instance.new("TextButton")
-    btn.Size=UDim2.new(1,0,1,0); btn.BackgroundTransparency=1; btn.Text=""; btn.BorderSizePixel=0; btn.ZIndex=10; btn.Parent=wrap
+    local lbl = Instance.new("TextLabel")
+    lbl.Text             = label
+    lbl.Size             = UDim2.new(1, -52, 1, 0)
+    lbl.Position         = UDim2.new(0, 12, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.TextColor3       = C.text
+    lbl.TextSize         = 11
+    lbl.Font             = Enum.Font.Gotham
+    lbl.TextXAlignment   = Enum.TextXAlignment.Left
+    lbl.Parent           = btn
 
-    -- Label (above button visually but doesnt block clicks since it has no input)
-    local lbl=Instance.new("TextLabel")
-    lbl.Text=label; lbl.Size=UDim2.new(1,-52,1,0); lbl.Position=UDim2.new(0,12,0,0)
-    lbl.BackgroundTransparency=1; lbl.TextColor3=C.text; lbl.TextSize=11; lbl.Font=Enum.Font.Gotham
-    lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.ZIndex=11; lbl.Parent=wrap
+    local track = Instance.new("Frame")
+    track.Size             = UDim2.new(0, 28, 0, 14)
+    track.Position         = UDim2.new(1, -36, 0.5, -7)
+    track.BackgroundColor3 = on and C.accent or C.off
+    track.BorderSizePixel  = 0
+    track.Parent           = btn
+    do local u = Instance.new("UICorner"); u.CornerRadius = UDim.new(0,7); u.Parent = track end
 
-    -- Pill track
-    local track=Instance.new("Frame")
-    track.Size=UDim2.new(0,28,0,14); track.Position=UDim2.new(1,-36,0.5,-7)
-    track.BackgroundColor3=on and C.accent or C.off; track.BorderSizePixel=0; track.ZIndex=11; track.Parent=wrap
-    do local u=Instance.new("UICorner"); u.CornerRadius=UDim.new(0,7); u.Parent=track end
+    local knob = Instance.new("Frame")
+    knob.Size             = UDim2.new(0, 10, 0, 10)
+    knob.Position         = on and UDim2.new(1,-12,0.5,-5) or UDim2.new(0,2,0.5,-5)
+    knob.BackgroundColor3 = on and C.textBright or Color3.fromRGB(170,165,190)
+    knob.BorderSizePixel  = 0
+    knob.Parent           = track
+    do local u = Instance.new("UICorner"); u.CornerRadius = UDim.new(0,9); u.Parent = knob end
 
-    -- Knob
-    local knob=Instance.new("Frame")
-    knob.Size=UDim2.new(0,10,0,10)
-    knob.Position=on and UDim2.new(1,-12,0.5,-5) or UDim2.new(0,2,0.5,-5)
-    knob.BackgroundColor3=on and C.textBright or Color3.fromRGB(170,165,190)
-    knob.BorderSizePixel=0; knob.ZIndex=12; knob.Parent=track
-    do local u=Instance.new("UICorner"); u.CornerRadius=UDim.new(0,9); u.Parent=knob end
-
-    activeToggles[label]={on=on, dot=nil, lbl=nil}
+    activeToggles[label] = {on=on, dot=nil, lbl=nil}
 
     local function refresh()
-        wrap.BackgroundColor3  = on and C.bg3 or C.bg2
+        btn.BackgroundColor3   = on and C.bg3 or C.bg2
         rs.Color               = on and C.borderOn or C.border
         track.BackgroundColor3 = on and C.accent or C.off
         knob.Position          = on and UDim2.new(1,-12,0.5,-5) or UDim2.new(0,2,0.5,-5)
         knob.BackgroundColor3  = on and C.textBright or Color3.fromRGB(170,165,190)
-        if activeToggles[label] then activeToggles[label].on=on end
+        if activeToggles[label] then activeToggles[label].on = on end
     end
 
     btn.MouseButton1Click:Connect(function()
-        on=not on; refresh(); onChange(on)
+        on = not on
+        refresh()
+        onChange(on)
     end)
 
-    return function(val) on=val; refresh(); onChange(on) end
+    return function(val) on = val; refresh(); onChange(on) end
 end
 
--- COMBAT ROW: toggle + keybind + hold/toggle mode
+
 local function makeCombatRow(label, defKey, onChange, onKb, onMode, page)
     local on = false
 
-    -- Use TextButton for the whole row so clicks always register
-    local row = Instance.new("TextButton")
-    row.Size             = UDim2.new(1, 0, 0, 34)
-    row.BackgroundColor3 = C.bg2
-    row.BorderSizePixel  = 0
-    row.Text             = ""
-    row.AutoButtonColor  = false
-    row.Parent           = page
-    corner(row, 7)
-    local rs = new("UIStroke", row, {Color=C.border, Thickness=1})
+    -- Button IS the row — same pattern as makeToggle
+    local btn = Instance.new("TextButton")
+    btn.Name             = "Combat_"..label
+    btn.Size             = UDim2.new(1, 0, 0, 34)
+    btn.BackgroundColor3 = C.bg2
+    btn.BorderSizePixel  = 0
+    btn.Text             = ""
+    btn.Font             = Enum.Font.Gotham
+    btn.Parent           = page
+    do local u = Instance.new("UICorner"); u.CornerRadius = UDim.new(0,7); u.Parent = btn end
+    local rs = Instance.new("UIStroke"); rs.Color = C.border; rs.Thickness = 1; rs.Parent = btn
 
-    -- Name label (non-interactive, just display)
     local lbl = Instance.new("TextLabel")
-    lbl.Text           = label
-    lbl.Size           = UDim2.new(1, -205, 1, 0)
-    lbl.Position       = UDim2.new(0, 12, 0, 0)
+    lbl.Text             = label
+    lbl.Size             = UDim2.new(1, -210, 1, 0)
+    lbl.Position         = UDim2.new(0, 12, 0, 0)
     lbl.BackgroundTransparency = 1
-    lbl.TextColor3     = C.text
-    lbl.TextSize       = 11
-    lbl.Font           = Enum.Font.Gotham
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Parent         = row
+    lbl.TextColor3       = C.text
+    lbl.TextSize         = 11
+    lbl.Font             = Enum.Font.Gotham
+    lbl.TextXAlignment   = Enum.TextXAlignment.Left
+    lbl.Parent           = btn
 
-    -- Keybind button (sits on top, handles its own click)
+    -- Keybind button
     local kbBtn = Instance.new("TextButton")
     kbBtn.Text             = "[" .. defKey .. "]"
     kbBtn.Size             = UDim2.new(0, 56, 0, 22)
-    kbBtn.Position         = UDim2.new(1, -163, 0.5, -11)
+    kbBtn.Position         = UDim2.new(1, -168, 0.5, -11)
     kbBtn.BackgroundColor3 = C.bg3
     kbBtn.TextColor3       = C.textDim
     kbBtn.TextSize         = 10
     kbBtn.Font             = Enum.Font.GothamBold
     kbBtn.BorderSizePixel  = 0
-    kbBtn.Parent           = row
-    corner(kbBtn, 5)
-    stroke(kbBtn, C.border, 1)
+    kbBtn.Parent           = btn
+    do local u = Instance.new("UICorner"); u.CornerRadius = UDim.new(0,5); u.Parent = kbBtn end
+    do local s = Instance.new("UIStroke"); s.Color = C.border; s.Thickness = 1; s.Parent = kbBtn end
 
-    -- Hold/Toggle mode button
+    -- Mode button
     local modeToggle = false
     local modeBtn = Instance.new("TextButton")
     modeBtn.Text             = "HOLD"
     modeBtn.Size             = UDim2.new(0, 50, 0, 22)
-    modeBtn.Position         = UDim2.new(1, -103, 0.5, -11)
+    modeBtn.Position         = UDim2.new(1, -108, 0.5, -11)
     modeBtn.BackgroundColor3 = C.bg3
     modeBtn.TextColor3       = C.textDim
     modeBtn.TextSize         = 9
     modeBtn.Font             = Enum.Font.GothamBold
     modeBtn.BorderSizePixel  = 0
-    modeBtn.Parent           = row
-    corner(modeBtn, 5)
-    local ms = stroke(modeBtn, C.border, 1)
+    modeBtn.Parent           = btn
+    do local u = Instance.new("UICorner"); u.CornerRadius = UDim.new(0,5); u.Parent = modeBtn end
+    local ms = Instance.new("UIStroke"); ms.Color = C.border; ms.Thickness = 1; ms.Parent = modeBtn
 
-    -- Pill toggle (visual only, no click handling needed — row handles it)
+    -- Pill
     local track = Instance.new("Frame")
     track.Size             = UDim2.new(0, 28, 0, 14)
     track.Position         = UDim2.new(1, -34, 0.5, -7)
     track.BackgroundColor3 = C.off
     track.BorderSizePixel  = 0
-    track.Parent           = row
-    corner(track, 7)
+    track.Parent           = btn
+    do local u = Instance.new("UICorner"); u.CornerRadius = UDim.new(0,7); u.Parent = track end
 
     local knob = Instance.new("Frame")
     knob.Size             = UDim2.new(0, 10, 0, 10)
@@ -371,28 +380,27 @@ local function makeCombatRow(label, defKey, onChange, onKb, onMode, page)
     knob.BackgroundColor3 = Color3.fromRGB(170, 165, 190)
     knob.BorderSizePixel  = 0
     knob.Parent           = track
-    corner(knob, 9)
+    do local u = Instance.new("UICorner"); u.CornerRadius = UDim.new(0,9); u.Parent = knob end
 
     activeToggles[label] = {on=false, dot=nil, lbl=nil}
 
     local function refresh()
+        btn.BackgroundColor3   = on and C.bg3 or C.bg2
         rs.Color               = on and C.borderOn or C.border
-        row.BackgroundColor3   = on and C.bg3 or C.bg2
         track.BackgroundColor3 = on and C.accent or C.off
         knob.Position          = on and UDim2.new(1,-12,0.5,-5) or UDim2.new(0,2,0.5,-5)
         knob.BackgroundColor3  = on and C.textBright or Color3.fromRGB(170,165,190)
         if activeToggles[label] then activeToggles[label].on = on end
     end
 
-    -- Row itself is the toggle button — clicking anywhere on the row that
-    -- isn't kbBtn or modeBtn will fire this
-    row.MouseButton1Click:Connect(function()
+    -- The main button click — fires when clicking anywhere EXCEPT kbBtn/modeBtn
+    -- because those child TextButtons consume their own clicks
+    btn.MouseButton1Click:Connect(function()
         on = not on
         refresh()
         onChange(on)
     end)
 
-    -- These inner buttons consume their own clicks so they don't bubble to row
     kbBtn.MouseButton1Click:Connect(function()
         task.spawn(openKB, label, function(k, l)
             kbBtn.Text = "[" .. l .. "]"
@@ -408,7 +416,10 @@ local function makeCombatRow(label, defKey, onChange, onKb, onMode, page)
         ms.Color                 = modeToggle and C.accentBright or C.border
         onMode(modeToggle)
     end)
+
+    return function(val) on = val; refresh(); onChange(on) end
 end
+
 
 local function makeSlider(label,minV,maxV,defV,suffix,onChange,page)
     suffix=suffix or ""
