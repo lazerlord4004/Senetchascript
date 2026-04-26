@@ -245,8 +245,6 @@ for i, name in ipairs(TAB_NAMES) do
         CanvasSize = UDim2.new(0,0,0,0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         Visible = false,
-        Active  = false,   -- disabled until tab selected
-        ScrollingEnabled = true,
     }, contentArea)
     vlist(sf, 4)
     pad(sf, 6, 6, 6, 6)
@@ -266,7 +264,7 @@ local function switchTab(name)
     for _, n in ipairs(TAB_NAMES) do
         local active = (n == name)
         tabPages[n].Visible = active
-        tabPages[n].Active  = active   -- prevent invisible tabs eating clicks
+        tabPages[n].Size    = active and UDim2.new(1,0,1,0) or UDim2.new(0,0,0,0)
         tabBtns[n].BackgroundColor3 = active and C.accent or C.bg3
         tabBtns[n].TextColor3       = active and C.textBright or C.textDim
     end
@@ -417,49 +415,70 @@ end
 
 local function makeToggle(name, cb, page)
     page = page or miscPage
-    local row = make("TextButton", {
-        Size = UDim2.new(1,0,0,32), BackgroundColor3 = C.bg2,
-        BorderSizePixel = 0, Text = "", Active = true,
-        AutoButtonColor = false,
-    }, page)
+
+    -- Single TextButton for the whole row — nothing inside can eat the click
+    local row = Instance.new("TextButton")
+    row.Size             = UDim2.new(1, 0, 0, 32)
+    row.BackgroundColor3 = C.bg2
+    row.BorderSizePixel  = 0
+    row.Text             = ""
+    row.Font             = Enum.Font.Gotham
+    row.TextTransparency = 1
+    row.Parent           = page
     corner(row, 7)
     local rS = make("UIStroke", {Color=C.border, Thickness=1}, row)
 
-    make("TextLabel", {
-        Text = name, Size = UDim2.new(1,-52,1,0), Position = UDim2.new(0,12,0,0),
-        BackgroundTransparency = 1, TextColor3 = C.text,
-        TextSize = 11, Font = Enum.Font.Gotham,
-        TextXAlignment = Enum.TextXAlignment.Left,
-    }, row)
+    local lbl = Instance.new("TextLabel")
+    lbl.Text             = name
+    lbl.Size             = UDim2.new(1, -52, 1, 0)
+    lbl.Position         = UDim2.new(0, 12, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.TextColor3       = C.text
+    lbl.TextSize         = 11
+    lbl.Font             = Enum.Font.Gotham
+    lbl.TextXAlignment   = Enum.TextXAlignment.Left
+    lbl.ZIndex           = row.ZIndex + 1
+    lbl.Parent           = row
 
-    local track = make("Frame", {
-        Size = UDim2.new(0,28,0,14), Position = UDim2.new(1,-36,0.5,-7),
-        BackgroundColor3 = C.off, BorderSizePixel = 0,
-    }, row)
+    local track = Instance.new("Frame")
+    track.Size             = UDim2.new(0, 28, 0, 14)
+    track.Position         = UDim2.new(1, -36, 0.5, -7)
+    track.BackgroundColor3 = C.off
+    track.BorderSizePixel  = 0
+    track.ZIndex           = row.ZIndex + 1
+    track.Parent           = row
     corner(track, 7)
 
-    local knob = make("Frame", {
-        Size = UDim2.new(0,10,0,10), Position = UDim2.new(0,2,0.5,-5),
-        BackgroundColor3 = Color3.fromRGB(170,165,190), BorderSizePixel = 0,
-    }, track)
+    local knob = Instance.new("Frame")
+    knob.Size             = UDim2.new(0, 10, 0, 10)
+    knob.Position         = UDim2.new(0, 2, 0.5, -5)
+    knob.BackgroundColor3 = Color3.fromRGB(170, 165, 190)
+    knob.BorderSizePixel  = 0
+    knob.ZIndex           = row.ZIndex + 2
+    knob.Parent           = track
     corner(knob, 9)
 
+    local state = false
     toggleStates[name] = false
 
     local function setState(on)
-        toggleStates[name]    = on
-        knob.Position         = on and UDim2.new(1,-12,0.5,-5) or UDim2.new(0,2,0.5,-5)
-        knob.BackgroundColor3 = on and Color3.fromRGB(255,255,255) or Color3.fromRGB(170,165,190)
-        track.BackgroundColor3= on and C.accent or C.off
-        row.BackgroundColor3  = on and C.bg3    or C.bg2
-        rS.Color              = on and C.borderOn or C.border
+        state                  = on
+        toggleStates[name]     = on
+        knob.Position          = on and UDim2.new(1,-12,0.5,-5) or UDim2.new(0,2,0.5,-5)
+        knob.BackgroundColor3  = on and Color3.fromRGB(255,255,255) or Color3.fromRGB(170,165,190)
+        track.BackgroundColor3 = on and C.accent or C.off
+        row.BackgroundColor3   = on and C.bg3    or C.bg2
+        rS.Color               = on and C.borderOn or C.border
     end
 
     row.MouseButton1Click:Connect(function()
-        setState(not toggleStates[name]); cb(toggleStates[name])
+        setState(not state)
+        cb(state)
     end)
+
     return setState
 end
+
 
 local function makeSlider(name, minV, maxV, defV, suffix, cb, page)
     page = page or miscPage; suffix = suffix or ""
@@ -552,61 +571,118 @@ end
 
 local function makeCombatRow(name, defKey, onToggle, onKb, onMode, page)
     page = page or aimPage
-    local row = make("Frame", {Size=UDim2.new(1,0,0,34), BackgroundColor3=C.bg2, BorderSizePixel=0}, page)
+
+    -- Outer frame
+    local row = Instance.new("Frame")
+    row.Size             = UDim2.new(1, 0, 0, 34)
+    row.BackgroundColor3 = C.bg2
+    row.BorderSizePixel  = 0
+    row.Parent           = page
     corner(row, 7)
     local rS = make("UIStroke", {Color=C.border, Thickness=1}, row)
 
-    make("TextLabel", {
-        Text=name, Size=UDim2.new(1,-205,1,0), Position=UDim2.new(0,12,0,0),
-        BackgroundTransparency=1, TextColor3=C.text, TextSize=11, Font=Enum.Font.Gotham,
-        TextXAlignment=Enum.TextXAlignment.Left,
-    }, row)
+    -- Name label
+    local lbl = Instance.new("TextLabel")
+    lbl.Text             = name
+    lbl.Size             = UDim2.new(1, -205, 1, 0)
+    lbl.Position         = UDim2.new(0, 12, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.TextColor3       = C.text
+    lbl.TextSize         = 11
+    lbl.Font             = Enum.Font.Gotham
+    lbl.TextXAlignment   = Enum.TextXAlignment.Left
+    lbl.Parent           = row
 
-    local kbBtn = make("TextButton", {
-        Text="["..defKey.."]", Size=UDim2.new(0,56,0,22), Position=UDim2.new(1,-163,0.5,-11),
-        BackgroundColor3=C.bg3, TextColor3=C.textDim, TextSize=10, Font=Enum.Font.GothamBold, BorderSizePixel=0,
-    }, row)
-    corner(kbBtn, 5); make("UIStroke",{Color=C.border,Thickness=1},kbBtn)
+    -- Keybind button
+    local kbBtn = Instance.new("TextButton")
+    kbBtn.Text             = "[" .. defKey .. "]"
+    kbBtn.Size             = UDim2.new(0, 56, 0, 22)
+    kbBtn.Position         = UDim2.new(1, -163, 0.5, -11)
+    kbBtn.BackgroundColor3 = C.bg3
+    kbBtn.TextColor3       = C.textDim
+    kbBtn.TextSize         = 10
+    kbBtn.Font             = Enum.Font.GothamBold
+    kbBtn.BorderSizePixel  = 0
+    kbBtn.Parent           = row
+    corner(kbBtn, 5)
+    make("UIStroke", {Color=C.border, Thickness=1}, kbBtn)
 
+    -- Hold/Toggle mode button
     local modeIsToggle = false
-    local modeBtn = make("TextButton", {
-        Text="HOLD", Size=UDim2.new(0,50,0,22), Position=UDim2.new(1,-103,0.5,-11),
-        BackgroundColor3=C.bg3, TextColor3=C.textDim, TextSize=9, Font=Enum.Font.GothamBold, BorderSizePixel=0,
-    }, row)
+    local modeBtn = Instance.new("TextButton")
+    modeBtn.Text             = "HOLD"
+    modeBtn.Size             = UDim2.new(0, 50, 0, 22)
+    modeBtn.Position         = UDim2.new(1, -103, 0.5, -11)
+    modeBtn.BackgroundColor3 = C.bg3
+    modeBtn.TextColor3       = C.textDim
+    modeBtn.TextSize         = 9
+    modeBtn.Font             = Enum.Font.GothamBold
+    modeBtn.BorderSizePixel  = 0
+    modeBtn.Parent           = row
     corner(modeBtn, 5)
-    local mS = make("UIStroke",{Color=C.border,Thickness=1},modeBtn)
+    local mS = make("UIStroke", {Color=C.border, Thickness=1}, modeBtn)
 
-    local track = make("Frame", {Size=UDim2.new(0,28,0,14), Position=UDim2.new(1,-34,0.5,-7), BackgroundColor3=C.off, BorderSizePixel=0}, row)
+    -- Toggle track + knob
+    local track = Instance.new("Frame")
+    track.Size             = UDim2.new(0, 28, 0, 14)
+    track.Position         = UDim2.new(1, -34, 0.5, -7)
+    track.BackgroundColor3 = C.off
+    track.BorderSizePixel  = 0
+    track.Parent           = row
     corner(track, 7)
-    local knob = make("Frame", {Size=UDim2.new(0,10,0,10), Position=UDim2.new(0,2,0.5,-5), BackgroundColor3=Color3.fromRGB(170,165,190), BorderSizePixel=0}, track)
+
+    local knob = Instance.new("Frame")
+    knob.Size             = UDim2.new(0, 10, 0, 10)
+    knob.Position         = UDim2.new(0, 2, 0.5, -5)
+    knob.BackgroundColor3 = Color3.fromRGB(170, 165, 190)
+    knob.BorderSizePixel  = 0
+    knob.Parent           = track
     corner(knob, 9)
 
-    local ta = make("TextButton", {Size=UDim2.new(1,-174,1,0), BackgroundTransparency=1, Text="", AutoButtonColor=false, Active=true}, row)
+    -- Invisible TextButton covering the left clickable area
+    local ta = Instance.new("TextButton")
+    ta.Size               = UDim2.new(1, -174, 1, 0)
+    ta.BackgroundTransparency = 1
+    ta.Text               = ""
+    ta.BorderSizePixel    = 0
+    ta.ZIndex             = 10
+    ta.Parent             = row
+
+    local state = false
     toggleStates[name] = false
 
-    ta.MouseButton1Click:Connect(function()
-        toggleStates[name] = not toggleStates[name]; local on = toggleStates[name]
+    local function setOn(on)
+        state                  = on
+        toggleStates[name]     = on
         knob.Position          = on and UDim2.new(1,-12,0.5,-5) or UDim2.new(0,2,0.5,-5)
         knob.BackgroundColor3  = on and Color3.fromRGB(255,255,255) or Color3.fromRGB(170,165,190)
         track.BackgroundColor3 = on and C.accent or C.off
         row.BackgroundColor3   = on and C.bg3    or C.bg2
         rS.Color               = on and C.borderOn or C.border
-        onToggle(on)
+    end
+
+    ta.MouseButton1Click:Connect(function()
+        setOn(not state)
+        onToggle(state)
     end)
 
     kbBtn.MouseButton1Click:Connect(function()
-        task.spawn(openKB, name, function(k,l) kbBtn.Text="["..l.."]"; onKb(k,l) end)
+        task.spawn(openKB, name, function(k, l)
+            kbBtn.Text = "[" .. l .. "]"
+            onKb(k, l)
+        end)
     end)
 
     modeBtn.MouseButton1Click:Connect(function()
         modeIsToggle = not modeIsToggle
-        modeBtn.Text              = modeIsToggle and "TOGGLE" or "HOLD"
-        modeBtn.BackgroundColor3  = modeIsToggle and C.accent or C.bg3
-        modeBtn.TextColor3        = modeIsToggle and C.textBright or C.textDim
-        mS.Color                  = modeIsToggle and C.accentBright or C.border
+        modeBtn.Text             = modeIsToggle and "TOGGLE" or "HOLD"
+        modeBtn.BackgroundColor3 = modeIsToggle and C.accent or C.bg3
+        modeBtn.TextColor3       = modeIsToggle and C.textBright or C.textDim
+        mS.Color                 = modeIsToggle and C.accentBright or C.border
         onMode(modeIsToggle)
     end)
 end
+
 
 local function makeScrollRow(name, minV, maxV, defV, suffix, cb, page)
     page = page or ragePage; suffix = suffix or ""
