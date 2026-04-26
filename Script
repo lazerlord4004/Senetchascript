@@ -92,12 +92,24 @@ local activeToggles={}
 -- ============================================================
 -- GUI SETUP
 -- ============================================================
-local screenGui = new("ScreenGui", player.PlayerGui, {
-    Name="Senetcha", ResetOnSpawn=false,
-    ZIndexBehavior=Enum.ZIndexBehavior.Sibling,
-    IgnoreGuiInset=true,
-    DisplayOrder=999,
-})
+-- Try to parent to CoreGui so it renders above all game GUIs
+local screenGui
+pcall(function()
+    screenGui = new("ScreenGui", game:GetService("CoreGui"), {
+        Name="Senetcha", ResetOnSpawn=false,
+        ZIndexBehavior=Enum.ZIndexBehavior.Sibling,
+        IgnoreGuiInset=true,
+        DisplayOrder=9999,
+    })
+end)
+if not screenGui then
+    screenGui = new("ScreenGui", player.PlayerGui, {
+        Name="Senetcha", ResetOnSpawn=false,
+        ZIndexBehavior=Enum.ZIndexBehavior.Sibling,
+        IgnoreGuiInset=true,
+        DisplayOrder=9999,
+    })
+end
 
 local mainFrame = new("Frame", screenGui, {
     Name="Main", Size=UDim2.new(0,400,0,520),
@@ -172,8 +184,6 @@ local charPage=tabPages["Character"]; local miscPage=tabPages["Misc"]; local plP
 local minimised=false
 closeBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible=false
-    UserInputService.MouseBehavior=Enum.MouseBehavior.Default
-    UserInputService.MouseIconEnabled=true
 end)
 minBtn.MouseButton1Click:Connect(function()
     minimised=not minimised
@@ -982,6 +992,19 @@ RunService.Heartbeat:Connect(function()
 end)
 
 -- ============================================================
+-- MOUSE FREEDOM LOOP
+-- Forces mouse unlocked every frame while menu is open.
+-- Game code tries to lock the mouse every frame so a one-shot
+-- set doesn't work — we have to keep setting it.
+-- ============================================================
+RunService.RenderStepped:Connect(function()
+    if mainFrame.Visible then
+        UserInputService.MouseBehavior    = Enum.MouseBehavior.Default
+        UserInputService.MouseIconEnabled = true
+    end
+end)
+
+-- ============================================================
 -- RUNTIME LOOPS
 -- ============================================================
 RunService.Stepped:Connect(function()
@@ -1010,10 +1033,6 @@ UserInputService.InputBegan:Connect(function(inp,gpe)
     if listeningForKey then return end; if gpe then return end
     if inp.KeyCode==menuKB then
         mainFrame.Visible=not mainFrame.Visible
-        if mainFrame.Visible then
-            UserInputService.MouseBehavior=Enum.MouseBehavior.Default
-            UserInputService.MouseIconEnabled=true
-        end
     end
 end)
 
@@ -1048,9 +1067,6 @@ task.spawn(function()
     end
     mainFrame.Position=pos
     mainFrame.BackgroundTransparency=0
-    -- Free mouse when menu first opens
-    UserInputService.MouseBehavior=Enum.MouseBehavior.Default
-    UserInputService.MouseIconEnabled=true
 end)
 
 print("[Senetcha] Loaded")
