@@ -232,6 +232,7 @@ pad(tabStrip, 4, 4, 4, 4)
 local contentArea = make("Frame", {
     Size = UDim2.new(1,0,1,-78), Position = UDim2.new(0,0,0,78),
     BackgroundTransparency = 1, ClipsDescendants = true,
+    Active = true,
 }, mainFrame)
 
 for i, name in ipairs(TAB_NAMES) do
@@ -242,6 +243,8 @@ for i, name in ipairs(TAB_NAMES) do
         CanvasSize = UDim2.new(0,0,0,0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         Visible = false,
+        Active  = false,   -- disabled until tab selected
+        ScrollingEnabled = true,
     }, contentArea)
     vlist(sf, 4)
     pad(sf, 6, 6, 6, 6)
@@ -259,9 +262,11 @@ end
 
 local function switchTab(name)
     for _, n in ipairs(TAB_NAMES) do
-        tabPages[n].Visible = (n == name)
-        tabBtns[n].BackgroundColor3 = (n == name) and C.accent or C.bg3
-        tabBtns[n].TextColor3       = (n == name) and C.textBright or C.textDim
+        local active = (n == name)
+        tabPages[n].Visible = active
+        tabPages[n].Active  = active   -- prevent invisible tabs eating clicks
+        tabBtns[n].BackgroundColor3 = active and C.accent or C.bg3
+        tabBtns[n].TextColor3       = active and C.textBright or C.textDim
     end
 end
 for _, name in ipairs(TAB_NAMES) do
@@ -412,7 +417,8 @@ local function makeToggle(name, cb, page)
     page = page or miscPage
     local row = make("TextButton", {
         Size = UDim2.new(1,0,0,32), BackgroundColor3 = C.bg2,
-        BorderSizePixel = 0, Text = "",
+        BorderSizePixel = 0, Text = "", Active = true,
+        AutoButtonColor = false,
     }, page)
     corner(row, 7)
     local rS = make("UIStroke", {Color=C.border, Thickness=1}, row)
@@ -499,8 +505,17 @@ local function makeSlider(name, minV, maxV, defV, suffix, cb, page)
     updateHandle((defV-minV)/(maxV-minV))
 
     local drag = false
-    track.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=true end end)
-    UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end end)
+    track.InputBegan:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=true end
+    end)
+    -- Use track.InputEnded NOT global so sliders don't interfere with each other
+    track.InputEnded:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end
+    end)
+    -- Also catch release outside track
+    UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end
+    end)
     RunService.RenderStepped:Connect(function()
         if not drag then return end
         local mp = UserInputService:GetMouseLocation()
@@ -564,7 +579,7 @@ local function makeCombatRow(name, defKey, onToggle, onKb, onMode, page)
     local knob = make("Frame", {Size=UDim2.new(0,10,0,10), Position=UDim2.new(0,2,0.5,-5), BackgroundColor3=Color3.fromRGB(170,165,190), BorderSizePixel=0}, track)
     corner(knob, 9)
 
-    local ta = make("TextButton", {Size=UDim2.new(1,-174,1,0), BackgroundTransparency=1, Text=""}, row)
+    local ta = make("TextButton", {Size=UDim2.new(1,-174,1,0), BackgroundTransparency=1, Text="", AutoButtonColor=false, Active=true}, row)
     toggleStates[name] = false
 
     ta.MouseButton1Click:Connect(function()
